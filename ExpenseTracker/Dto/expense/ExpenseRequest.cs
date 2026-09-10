@@ -7,4 +7,5 @@ public class ExpenseRequest
     private Double Amount { get; set; }
     private CategoryResponse CategoryRespone { get; set; }
     private int CategoryId { get; set; }
+    private CategoryType Type { get; set; }
 }

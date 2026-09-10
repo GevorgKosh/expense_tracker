@@ -9,5 +9,6 @@ public class ExpenseResponse
     public DateTime Date { get; set; }
     public string Currency { get; set; }
     public CategoryResponse CategoryRespone { get; set; }
+    public CategoryType Type { get; set; }
     public int CategoryId { get; set; }
 }
