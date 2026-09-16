@@ -9,5 +9,6 @@ public class MappingProfile: Profile
     {
         CreateMap<Expense, ExpenseResponse>();
         CreateMap<Category, CategoryResponse>();
+        CreateMap<Category, CategoryResponse>();
     }
 }

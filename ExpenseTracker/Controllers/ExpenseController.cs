@@ -8,7 +8,7 @@ namespace ExpenseTracker.Controllers;
 
 [ApiController]
 [Route("api/expense")]
-public class ExpenseController(ExpenseDbContext context, IMapper mapper): ControllerBase
+public class ExpenseController(ExpenseTrackerDbContext context, IMapper mapper): ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ICollection<ExpenseResponse>>> GetExpenseList()
@@ -75,7 +75,7 @@ public class ExpenseController(ExpenseDbContext context, IMapper mapper): Contro
         return Ok(true);
     }
 
-    [HttpGet]
+    [HttpGet("filter")]
     public async Task<ActionResult<ICollection<ExpenseResponse>>> GetFilteredExpenses([FromQuery] ExpenseFilter filter)
     {
         IQueryable<Expense> query = context.Expenses.Include(expense => expense.Category);

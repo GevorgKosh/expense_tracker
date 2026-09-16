@@ -9,7 +9,7 @@ namespace ExpenseTracker.Controllers;
 
 [ApiController]
 [Route("api/category")]
-public class CategoryController(ExpenseDbContext context, IMapper mapper): ControllerBase
+public class CategoryController(ExpenseTrackerDbContext context, IMapper mapper): ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ICollection<CategoryResponse>>> GetCategories()
