@@ -1,12 +1,36 @@
+using System.Text;
+using ExpenseTracker.Data;
 using ExpenseTracker.Mapping;
+using ExpenseTracker.Service;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
 builder.Services.AddControllers();
-builder.Services.AddAutoMapper(typeof(MappingProfile));
+builder.Services.AddOpenApi();
+builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
 builder.Services.AddSwaggerGen();
-//builder.Services.I
+builder.Services.AddDbContext<ExpenseTrackerDbContext>(options => 
+    options.UseSqlServer(builder.Configuration.GetConnectionString("UserDatabase")));
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["AppSettings:Issuer"],
+            ValidAudience = builder.Configuration["AppSettings:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["AppSettings:Token"]!))
+        };
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<IAuthService,  AuthService>();
 
 var app = builder.Build();
 

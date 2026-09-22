@@ -1,14 +1,18 @@
-﻿using ExpenseTracker.Data;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.user;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 namespace ExpenseTracker.Service;
 
-public class AuthService: IAuthService
+public class AuthService(ExpenseTrackerDbContext context, IConfiguration configuration): IAuthService
 {
-    public async Task<User?> Register(ExpenseTrackerDbContext context, UserRegisterRequest request)
+    public async Task<User?> Register(UserRegisterRequest request)
     {
         var isExist = context.Users.Any(u => u.UserName == request.UserName);
         if (!isExist) throw new Exception("User with such name is already exists");
@@ -25,19 +29,35 @@ public class AuthService: IAuthService
         return user;
     }
 
-    public async Task<User?> Login(ExpenseTrackerDbContext context, UserLoginRequest request)
+    public async Task<string?> Login(UserLoginRequest request)
     {
-        var user = await context.Users.SingleOrDefaultAsync(u => u.UserName == request.UserName);
-        if (user is null || PasswordHasher)
+        var hasher = new PasswordHasher<User>();
+        var user = await context.Users.FirstOrDefaultAsync(u => u.UserName == request.UserName);
+        if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
             throw new Exception("Incorrect username or password");
- 
-        var hash = new PasswordHasher<User>().HashPassword(user, request.Password);
-        user.UserName = request.UserName;
-        user.PasswordHash = hash;
+
+        string token = CreateToken(user);
+
+        return token;
+    }
+
+    private string CreateToken(User user)
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, user.UserName),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+        };
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration.GetValue<string>("AppSettings:Token")!));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512);
+        var tokenDescriptor = new JwtSecurityToken(
+            issuer: configuration.GetValue<string>("AppSettings:Issuer"),
+            audience: configuration.GetValue<string>("AppSettings:Audience"),
+            claims: claims,
+            expires: DateTime.Now.AddHours(3),
+            signingCredentials: creds
+            );
         
-        context.Users.Add(user);
-        await context.SaveChangesAsync();
-        
-        return user;
+        return new JwtSecurityTokenHandler().WriteToken(tokenDescriptor);
     }
 }

@@ -6,6 +6,6 @@ namespace ExpenseTracker.Service;
 
 public interface IAuthService
 {
-    Task<User?> Register(ExpenseTrackerDbContext context, UserRegisterRequest request);
-    Task<User?> Login(ExpenseTrackerDbContext context, UserLoginRequest request);
+    Task<User?> Register(UserRegisterRequest request);
+    Task<string?> Login(UserLoginRequest request);
 }
