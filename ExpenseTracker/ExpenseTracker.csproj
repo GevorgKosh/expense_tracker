@@ -8,12 +8,18 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+        <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     </ItemGroup>
 
     <ItemGroup>
@@ -23,7 +29,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Exceptions\" />
+      <Folder Include="DTOs\Request\Category\" />
+      <Folder Include="DTOs\Request\Expense\" />
+      <Folder Include="DTOs\Response\Category\" />
+      <Folder Include="DTOs\Response\Expense\" />
     </ItemGroup>
 
 </Project>
