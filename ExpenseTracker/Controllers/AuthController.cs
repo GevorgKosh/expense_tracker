@@ -11,14 +11,12 @@ namespace ExpenseTracker.Controllers;
 public class AuthController(IAuthService service): ControllerBase
 {
     [HttpPost("register")]
-    public async Task<ActionResult<User>> Register(UserRegisterRequest request)
+    public async Task<ActionResult<UserResponse>> Register(UserRegisterRequest request)
     {
         var user = await service.Register(request);
-        if (user is null)
-        {
-            return BadRequest("Username already exists");
-        }
-        return Ok(user);
+        var response = new UserResponse(user.Id, user.UserName, user.Email);
+        
+        return CreatedAtAction(nameof(Register), new { id = user.Id }, response);
     }
 
     [HttpPost("login")]

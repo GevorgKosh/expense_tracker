@@ -14,16 +14,17 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
 {
     public async Task<User?> Register(UserRegisterRequest request)
     {
-        var isExist = context.Users.Any(u => u.UserName == request.UserName);
-        if (!isExist) throw new Exception("User with such name is already exists");
+        var isExist = context.User.Any(u => u.UserName == request.UserName);
+        if (isExist) throw new Exception("User with such name is already exists");
         
         var user = new User();
  
         var hasher = new PasswordHasher<User>().HashPassword(user, request.Password);
         user.UserName = request.UserName;
         user.PasswordHash = hasher;
+        user.Email = request.Email;
         
-        context.Users.Add(user);
+        context.User.Add(user);
         await context.SaveChangesAsync();
         
         return user;
@@ -32,7 +33,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
     public async Task<string?> Login(UserLoginRequest request)
     {
         var hasher = new PasswordHasher<User>();
-        var user = await context.Users.FirstOrDefaultAsync(u => u.UserName == request.UserName);
+        var user = await context.User.FirstOrDefaultAsync(u => u.UserName == request.UserName);
         if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
             throw new Exception("Incorrect username or password");
 

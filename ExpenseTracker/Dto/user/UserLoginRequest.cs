@@ -1,7 +1,9 @@
-﻿namespace ExpenseTracker.Dto.user;
+﻿using System.ComponentModel.DataAnnotations;
 
-public class UserLoginRequest
-{
-    public string UserName { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-}
+namespace ExpenseTracker.Dto.user;
+
+public record UserLoginRequest
+(
+    [Required] string UserName,
+    [Required] string PasswordHash
+);
