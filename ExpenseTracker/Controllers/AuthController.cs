@@ -14,7 +14,7 @@ public class AuthController(IAuthService service): ControllerBase
     public async Task<ActionResult<UserResponse>> Register(UserRegisterRequest request)
     {
         var user = await service.Register(request);
-        var response = new UserResponse(user.Id, user.UserName, user.Email);
+        var response = new UserResponse(user.Id, user.Name, user.Email);
         
         return CreatedAtAction(nameof(Register), new { id = user.Id }, response);
     }

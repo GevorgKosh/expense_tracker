@@ -1,10 +1,10 @@
-﻿namespace ExpenseTracker.Dto;
+namespace ExpenseTracker.Dto;
 
 public class CategoryResponse
 {
-    private int Id { get; set; }
-    private int Type { get; set; }
-    private string Name { get; set; }
-    private string Description { get; set; }
-    private List<ExpenseResponse> Expenses { get; set; }
+    public int Id { get; set; }
+    public int Type { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public List<ExpenseResponse> Expenses { get; set; }
 }

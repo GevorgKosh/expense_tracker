@@ -10,4 +10,5 @@ public class Expense
     public string Currency { get; set; }
     public Category Category { get; set; }
     public int CategoryId { get; set; }
+    public int UserId { get; set; }
 }

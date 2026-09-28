@@ -14,13 +14,13 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
 {
     public async Task<User?> Register(UserRegisterRequest request)
     {
-        var isExist = context.User.Any(u => u.UserName == request.UserName);
+        var isExist = context.User.Any(u => u.Name == request.UserName);
         if (isExist) throw new Exception("User with such name is already exists");
         
         var user = new User();
  
         var hasher = new PasswordHasher<User>().HashPassword(user, request.Password);
-        user.UserName = request.UserName;
+        user.Name = request.UserName;
         user.PasswordHash = hasher;
         user.Email = request.Email;
         
@@ -33,7 +33,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
     public async Task<string?> Login(UserLoginRequest request)
     {
         var hasher = new PasswordHasher<User>();
-        var user = await context.User.FirstOrDefaultAsync(u => u.UserName == request.UserName);
+        var user = await context.User.FirstOrDefaultAsync(u => u.Name == request.UserName);
         if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
             throw new Exception("Incorrect username or password");
 
@@ -46,7 +46,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
     {
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, user.UserName),
+            new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
         };
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration.GetValue<string>("AppSettings:Token")!));

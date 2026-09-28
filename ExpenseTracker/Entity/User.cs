@@ -8,16 +8,16 @@ public class User
 {
     public User()
     {}
-    public User(string userName, string passwordHash)
+    public User(string name, string passwordHash)
     {
-        UserName = userName;
+        Name = name;
         PasswordHash = passwordHash;
     }
 
-    public User(int id, string userName, string email, string passwordHash)
+    public User(int id, string name, string email, string passwordHash)
     {
         Id = id;
-        UserName = userName;
+        Name = name;
         Email = email;
         PasswordHash = passwordHash;
     }
@@ -25,7 +25,7 @@ public class User
     [Key]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
-    public string UserName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public List<Expense>? ExpenseList { get; set; } = null;

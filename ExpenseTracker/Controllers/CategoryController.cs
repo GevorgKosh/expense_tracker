@@ -62,8 +62,8 @@ public class CategoryController(ExpenseTrackerDbContext context, IMapper mapper)
         var updatedCategory = await context.Categories.FindAsync(id);
         if (updatedCategory is null)
             throw new Exception($"Category with id {id} not found");
-        
-        context.Categories.Update(updatedCategory);
+
+        mapper.Map(category, updatedCategory);
         var result = await context.SaveChangesAsync();
         return Ok(result > 0);
     }

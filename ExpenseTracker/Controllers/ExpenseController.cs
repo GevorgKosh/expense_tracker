@@ -65,10 +65,9 @@ public class ExpenseController(ExpenseTrackerDbContext context, IMapper mapper):
         }
 
         var expense = mapper.Map<Expense>(request);
-        result.Date = expense.Date;
         result.Name = expense.Name;
         result.Description = expense.Description;
-        result.Category = expense.Category;
+        result.Amount = expense.Amount;
         result.CategoryId = expense.CategoryId;
 
         await context.SaveChangesAsync();
@@ -80,6 +79,11 @@ public class ExpenseController(ExpenseTrackerDbContext context, IMapper mapper):
     {
         IQueryable<Expense> query = context.Expenses.Include(expense => expense.Category);
 
+        if (filter.UserId is not null) 
+        {
+            query = query.Where(expense => expense.UserId == filter.UserId);
+        }
+        
         if (filter.CategoryId is not null) 
         {
             query = query.Where(expense => expense.CategoryId == filter.CategoryId);
