@@ -11,22 +11,18 @@ namespace ExpenseTracker.Controllers;
 public class AuthController(IAuthService service): ControllerBase
 {
     [HttpPost("register")]
-    public async Task<ActionResult<UserResponse>> Register(UserRegisterRequest request)
+    public async Task<ActionResult<BaseResponse<UserResponse>>> Register(UserRegisterRequest request)
     {
-        var user = await service.Register(request);
-        var response = new UserResponse(user.Id, user.Name, user.Email);
-        
-        return CreatedAtAction(nameof(Register), new { id = user.Id }, response);
+        var response = await service.Register(request);
+
+        return StatusCode(response.Status, response);
     }
 
     [HttpPost("login")]
-    public async Task<ActionResult<string>> Login(UserLoginRequest request)
+    public async Task<ActionResult<BaseResponse<LoginResponse>>> Login(UserLoginRequest request)
     {
-        var token = await service.Login(request);
-        if (token is null)
-        {
-            return BadRequest("Username or password is incorrect");
-        }
-        return Ok(token);
+        var response = await service.Login(request);
+
+        return StatusCode(response.Status, response);
     }
 }

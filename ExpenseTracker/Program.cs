@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddValidation();
 builder.Services.AddControllers();
+builder.Services.AddHttpLogging();
 builder.Services.AddOpenApi();
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
 builder.Services.AddSwaggerGen();
@@ -52,5 +53,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.UseHttpsRedirection();
+app.UseHttpLogging();
 app.MapControllers();
 app.Run();

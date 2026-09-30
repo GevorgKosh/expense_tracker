@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
@@ -12,11 +13,19 @@ namespace ExpenseTracker.Service;
 
 public class AuthService(ExpenseTrackerDbContext context, IConfiguration configuration): IAuthService
 {
-    public async Task<User?> Register(UserRegisterRequest request)
+    public async Task<BaseResponse<UserResponse>> Register(UserRegisterRequest request)
     {
-        var isExist = context.User.Any(u => u.Name == request.UserName);
-        if (isExist) throw new Exception("User with such name is already exists");
-        
+        var isExist = await context.User.AnyAsync(u => u.Name == request.UserName);
+        if (isExist)
+        {
+            return new BaseResponse<UserResponse>
+            {
+                Status = StatusCodes.Status409Conflict,
+                Error = "Conflict",
+                Message = "User with such name already exists"
+            };
+        }
+
         var user = new User();
  
         var hasher = new PasswordHasher<User>().HashPassword(user, request.Password);
@@ -27,22 +36,68 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         context.User.Add(user);
         await context.SaveChangesAsync();
         
-        return user;
+        return new BaseResponse<UserResponse>
+        {
+            Status = StatusCodes.Status201Created,
+            Message = "User registered successfully",
+            Details = new UserResponse(user.Id, user.Name, user.Email)
+        };
     }
 
-    public async Task<string?> Login(UserLoginRequest request)
+    public async Task<BaseResponse<LoginResponse>> Login(UserLoginRequest request)
     {
         var hasher = new PasswordHasher<User>();
         var user = await context.User.FirstOrDefaultAsync(u => u.Name == request.UserName);
         if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
-            throw new Exception("Incorrect username or password");
+        {
+            return new BaseResponse<LoginResponse>
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Error = "Unauthorized",
+                Message = "Incorrect username or password"
+            };
+        }
 
-        string token = CreateToken(user);
+        var token = await CreateTokenModel(user);
 
-        return token;
+        return new BaseResponse<LoginResponse>
+        {
+            Status = StatusCodes.Status200OK,
+            Message = "Logged in successfully",
+            Details = new LoginResponse
+            {
+                User = new UserResponse(user.Id, user.Name, user.Email),
+                Token = token
+            }
+        };
     }
 
-    private string CreateToken(User user)
+    // Issues a new access/refresh token pair and stores the refresh token on the user.
+    private async Task<TokenModel> CreateTokenModel(User user)
+    {
+        var now = DateTime.UtcNow;
+        var accessTokenExpiresAt = now + TokenModel.AccessTokenLifetime;
+        var refreshTokenExpiresAt = now + TokenModel.RefreshTokenLifetime;
+
+        user.RefreshToken = GenerateRefreshToken();
+        user.RefreshTokenExpiresAt = refreshTokenExpiresAt;
+        await context.SaveChangesAsync();
+
+        return new TokenModel
+        {
+            AccessToken = CreateAccessToken(user, accessTokenExpiresAt),
+            AccessTokenExpiresAt = accessTokenExpiresAt,
+            RefreshToken = user.RefreshToken,
+            RefreshTokenExpiresAt = refreshTokenExpiresAt
+        };
+    }
+
+    private static string GenerateRefreshToken()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    }
+
+    private string CreateAccessToken(User user, DateTime expiresAt)
     {
         var claims = new List<Claim>
         {
@@ -55,7 +110,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
             issuer: configuration.GetValue<string>("AppSettings:Issuer"),
             audience: configuration.GetValue<string>("AppSettings:Audience"),
             claims: claims,
-            expires: DateTime.Now.AddHours(3),
+            expires: expiresAt,
             signingCredentials: creds
             );
         

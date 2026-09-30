@@ -18,6 +18,8 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
             builder.Property(e => e.Name).HasMaxLength(128);
             builder.Property(e => e.PasswordHash).HasMaxLength(128);
             builder.Property(e => e.Email).HasMaxLength(128);
+            builder.Property(e => e.RefreshToken).HasMaxLength(128);
+            builder.HasIndex(e => e.RefreshToken).IsUnique();
         });
         
         builder.Entity<Category>(builder =>
