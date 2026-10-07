@@ -9,7 +9,7 @@ namespace ExpenseTracker.Controllers;
 
 [ApiController]
 [Route("api/category")]
-public class CategoryController(ExpenseDbContext context, IMapper mapper): ControllerBase
+public class CategoryController(ExpenseTrackerDbContext context, IMapper mapper): ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ICollection<CategoryResponse>>> GetCategories()
@@ -62,8 +62,8 @@ public class CategoryController(ExpenseDbContext context, IMapper mapper): Contr
         var updatedCategory = await context.Categories.FindAsync(id);
         if (updatedCategory is null)
             throw new Exception($"Category with id {id} not found");
-        
-        context.Categories.Update(updatedCategory);
+
+        mapper.Map(category, updatedCategory);
         var result = await context.SaveChangesAsync();
         return Ok(result > 0);
     }

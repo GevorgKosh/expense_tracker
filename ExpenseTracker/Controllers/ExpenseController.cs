@@ -8,7 +8,7 @@ namespace ExpenseTracker.Controllers;
 
 [ApiController]
 [Route("api/expense")]
-public class ExpenseController(ExpenseDbContext context, IMapper mapper): ControllerBase
+public class ExpenseController(ExpenseTrackerDbContext context, IMapper mapper): ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ICollection<ExpenseResponse>>> GetExpenseList()
@@ -65,21 +65,25 @@ public class ExpenseController(ExpenseDbContext context, IMapper mapper): Contro
         }
 
         var expense = mapper.Map<Expense>(request);
-        result.Date = expense.Date;
         result.Name = expense.Name;
         result.Description = expense.Description;
-        result.Category = expense.Category;
+        result.Amount = expense.Amount;
         result.CategoryId = expense.CategoryId;
 
         await context.SaveChangesAsync();
         return Ok(true);
     }
 
-    [HttpGet]
+    [HttpGet("filter")]
     public async Task<ActionResult<ICollection<ExpenseResponse>>> GetFilteredExpenses([FromQuery] ExpenseFilter filter)
     {
         IQueryable<Expense> query = context.Expenses.Include(expense => expense.Category);
 
+        if (filter.UserId is not null) 
+        {
+            query = query.Where(expense => expense.UserId == filter.UserId);
+        }
+        
         if (filter.CategoryId is not null) 
         {
             query = query.Where(expense => expense.CategoryId == filter.CategoryId);

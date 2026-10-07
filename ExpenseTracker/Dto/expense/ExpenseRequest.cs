@@ -1,11 +1,11 @@
-﻿namespace ExpenseTracker.Dto;
+namespace ExpenseTracker.Dto;
 
 public class ExpenseRequest
 {
-    private string Name { get; set; }
-    private string Description { get; set; }
-    private Double Amount { get; set; }
-    private CategoryResponse CategoryRespone { get; set; }
-    private int CategoryId { get; set; }
-    private CategoryType Type { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public Double Amount { get; set; }
+    public CategoryResponse CategoryRespone { get; set; }
+    public int CategoryId { get; set; }
+    public CategoryType Type { get; set; }
 }
