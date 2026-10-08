@@ -5,6 +5,7 @@ using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +14,22 @@ builder.Services.AddControllers();
 builder.Services.AddHttpLogging();
 builder.Services.AddOpenApi();
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token"
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+    });
+});
 builder.Services.AddDbContext<ExpenseTrackerDbContext>(options => 
     options.UseSqlServer(builder.Configuration.GetConnectionString("UserDatabase")));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -33,6 +49,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService,  AuthService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IExpenseService, ExpenseService>();
 
 var app = builder.Build();
 
@@ -51,8 +69,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
-app.UseHttpsRedirection();
 app.UseHttpLogging();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 app.Run();

@@ -1,122 +1,65 @@
-﻿using AutoMapper;
-using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
+using ExpenseTracker.Service;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Controllers;
 
 [ApiController]
 [Route("api/expense")]
-public class ExpenseController(ExpenseTrackerDbContext context, IMapper mapper): ControllerBase
+public class ExpenseController(IExpenseService service): ControllerBase
 {
+    [Authorize]
     [HttpGet]
-    public async Task<ActionResult<ICollection<ExpenseResponse>>> GetExpenseList()
+    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetExpenseList()
     {
-        var expenses = await context.Expenses.Select(expense =>
-            mapper.Map<ExpenseResponse>(expense)
-            ).ToListAsync();
-        
-        return Ok(expenses);
+        var response = await service.GetExpenses();
+
+        return StatusCode(response.Status, response);
     }
 
+    [Authorize]
     [HttpPost]
-    public async Task<ActionResult<bool>> CreateExpense(ExpenseRequest request)
+    public async Task<ActionResult<BaseResponse<bool>>> CreateExpense(ExpenseRequest request)
     {
-        var expense = mapper.Map<Expense>(request);
-        expense.Date = DateTime.UtcNow;
-        
-        context.Expenses.Add(expense);
-        var result = await context.SaveChangesAsync();
-        return Ok(result > 0);
+        var response = await service.Create(request);
+
+        return StatusCode(response.Status, response);
     }
 
+    [Authorize]
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<ExpenseResponse>> GetExpenseById(int id)
+    public async Task<ActionResult<BaseResponse<ExpenseResponse>>> GetExpenseById(int id)
     {
-        var result = await context.Expenses.FirstOrDefaultAsync(expense => expense.Id == id);
-        if (result == null)
-        {
-            throw new Exception("No such Expense");
-        }
-        return Ok(mapper.Map<ExpenseResponse>(result));
+        var response = await service.GetById(id);
+
+        return StatusCode(response.Status, response);
     }
 
+    [Authorize]
     [HttpDelete("{id:int}")]
-    public async Task<ActionResult<bool>> DeleteExpense(int id)
+    public async Task<ActionResult<BaseResponse<bool>>> DeleteExpense(int id)
     {
-        var expense = await context.Expenses.FirstOrDefaultAsync(expense => expense.Id == id);
-        if (expense == null)
-        {
-            throw new Exception("No such Expense");
-        }
-        context.Expenses.Remove(expense);
-        var result = await context.SaveChangesAsync();
-        return Ok(result > 0);
+        var response = await service.Delete(id);
+
+        return StatusCode(response.Status, response);
     }
 
+    [Authorize]
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<bool>> UpdateExpense(int id, ExpenseRequest request)
+    public async Task<ActionResult<BaseResponse<bool>>> UpdateExpense(int id, ExpenseRequest request)
     {
-        var result = await context.Expenses.FirstOrDefaultAsync(expense => expense.Id == id);
-        if (result == null)
-        {
-            throw new Exception("No such Expense is found");
-        }
+        var response = await service.Update(id, request);
 
-        var expense = mapper.Map<Expense>(request);
-        result.Name = expense.Name;
-        result.Description = expense.Description;
-        result.Amount = expense.Amount;
-        result.CategoryId = expense.CategoryId;
-
-        await context.SaveChangesAsync();
-        return Ok(true);
+        return StatusCode(response.Status, response);
     }
 
+    [Authorize]
     [HttpGet("filter")]
-    public async Task<ActionResult<ICollection<ExpenseResponse>>> GetFilteredExpenses([FromQuery] ExpenseFilter filter)
+    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetFilteredExpenses([FromQuery] ExpenseFilter filter)
     {
-        IQueryable<Expense> query = context.Expenses.Include(expense => expense.Category);
+        var response = await service.GetFiltered(filter);
 
-        if (filter.UserId is not null) 
-        {
-            query = query.Where(expense => expense.UserId == filter.UserId);
-        }
-        
-        if (filter.CategoryId is not null) 
-        {
-            query = query.Where(expense => expense.CategoryId == filter.CategoryId);
-        }
-
-        if (filter.Currency is not null)
-        {
-            query = query.Where(expense => expense.Currency == filter.Currency);
-        }
-        
-        if (filter.MinAmount is not null)
-        {
-            query = query.Where(expense => expense.Amount >= filter.MinAmount);
-        }
-        
-        if (filter.MaxAmount is not null)
-        {
-            query = query.Where(expense => expense.Amount <= filter.MaxAmount);
-        }
-        
-        if (filter.DateFrom is not null)
-        {
-            query = query.Where(expense => expense.Date >= filter.DateFrom);
-        }
-
-        if (filter.DateTo is not null)
-        {
-            query = query.Where(expense => expense.Date <= filter.DateTo);
-        }
-        
-        var response = await query.ToListAsync();
-        var expenses = mapper.Map<ICollection<ExpenseResponse>>(response);
-
-        return Ok(expenses);
-    } 
+        return StatusCode(response.Status, response);
+    }
 }
