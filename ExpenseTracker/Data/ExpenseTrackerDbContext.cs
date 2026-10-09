@@ -28,6 +28,12 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
             builder.HasKey(e => e.Id);
             builder.Property(e => e.Name).HasMaxLength(128);
             builder.Property(e => e.Description).HasMaxLength(128);
+            builder.HasData(
+                new Category { Id = 1, Type = CategoryType.Food, Name = "Food", Description = "Groceries, restaurants and dining" },
+                new Category { Id = 2, Type = CategoryType.Transportation, Name = "Transportation", Description = "Fuel, public transport and taxis" },
+                new Category { Id = 3, Type = CategoryType.Shopping, Name = "Shopping", Description = "Clothing, electronics and other purchases" },
+                new Category { Id = 4, Type = CategoryType.Utilities, Name = "Utilities", Description = "Electricity, water, gas and internet" }
+            );
         });
 
         builder.Entity<Expense>(builder =>
