@@ -86,6 +86,15 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<bool>> Create(ExpenseRequest request)
     {
+        if (request.Amount <= 0)
+        {
+            return InvalidAmount();
+        }
+
+        if (request.Currency.Length != 3 || request.Currency.All(c => !char.IsLetter(c)))
+        {
+            return InvalidCurrency();
+        }
         var expense = mapper.Map<Expense>(request);
         expense.Date = DateTime.UtcNow;
 
@@ -102,6 +111,11 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<bool>> Update(int id, ExpenseRequest request)
     {
+        if (request.Amount <= 0)
+        {
+            return InvalidAmount();
+        }
+
         var existing = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id);
         if (existing is null)
         {
@@ -150,6 +164,26 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
             Status = StatusCodes.Status404NotFound,
             Error = "Not Found",
             Message = $"Expense with id {id} not found"
+        };
+    }
+
+    private static BaseResponse<bool> InvalidAmount()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "Expense amount must be greater than zero"
+        };
+    }
+    
+    private static BaseResponse<bool> InvalidCurrency()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "Currency must contain exactly three uppercase letters"
         };
     }
 }
