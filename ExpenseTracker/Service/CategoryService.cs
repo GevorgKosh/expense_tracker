@@ -38,7 +38,30 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
     public async Task<BaseResponse<bool>> Create(CategoryRequest request)
     {
+        var isNameAlreadyExist = await context.Categories.AnyAsync(c => c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
+        if (isNameAlreadyExist)
+        {
+            return new BaseResponse<bool>
+            {
+                Status = StatusCodes.Status409Conflict,
+                Message = "Category already exist",
+                Details = false
+            };
+        }
+        
+        var isTypeAlreadyExist = await context.Categories.AnyAsync(c => c.Type ==  request.Type);
+        if (isTypeAlreadyExist)
+        {
+            return new BaseResponse<bool>
+            {
+                Status = StatusCodes.Status409Conflict,
+                Message = "Category type already exist",
+                Details = false
+            };
+        }
+        
         var category = mapper.Map<Category>(request);
+        
         context.Categories.Add(category);
         var result = await context.SaveChangesAsync();
 
@@ -55,9 +78,24 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return NotFound<bool>(id);
+            return new BaseResponse<bool>
+            {
+                Status = StatusCodes.Status404NotFound,
+                Message = "Category isn`t found",
+                Details = false
+            };
         }
-
+        
+        var restrictUpdating = await context.Categories.AnyAsync(c => c.Id != id && c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
+        if (restrictUpdating)
+        {
+            return new BaseResponse<bool>
+            {
+                Status = StatusCodes.Status409Conflict,
+                Message = "Category with such name is already exist",
+                Details = false
+            };
+        }
         mapper.Map(request, category);
         await context.SaveChangesAsync();
 

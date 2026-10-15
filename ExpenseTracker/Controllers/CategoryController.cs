@@ -23,9 +23,14 @@ public class CategoryController(ICategoryService service): ControllerBase
     [HttpPost]
     public async Task<ActionResult<BaseResponse<bool>>> CreateCategory(CategoryRequest category)
     {
-        var response = await service.Create(category);
-
-        return StatusCode(response.Status, response);
+        await service.Create(category);
+        
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status201Created,
+            Message = "Category is successfully created",
+            Details = true
+        };
     }
 
     [Authorize]

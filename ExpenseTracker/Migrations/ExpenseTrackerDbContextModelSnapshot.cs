@@ -177,7 +177,7 @@ namespace ExpenseTracker.Migrations
                     b.HasOne("ExpenseTracker.Dto.Category", "Category")
                         .WithMany("Expenses")
                         .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("ExpenseTracker.Dto.User", null)
