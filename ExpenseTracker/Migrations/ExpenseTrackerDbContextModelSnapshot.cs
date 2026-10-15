@@ -35,6 +35,10 @@ namespace ExpenseTracker.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -52,6 +56,7 @@ namespace ExpenseTracker.Migrations
                         {
                             Id = 1,
                             Description = "Groceries, restaurants and dining",
+                            IsActive = true,
                             Name = "Food",
                             Type = 0
                         },
@@ -59,6 +64,7 @@ namespace ExpenseTracker.Migrations
                         {
                             Id = 2,
                             Description = "Fuel, public transport and taxis",
+                            IsActive = true,
                             Name = "Transportation",
                             Type = 1
                         },
@@ -66,6 +72,7 @@ namespace ExpenseTracker.Migrations
                         {
                             Id = 3,
                             Description = "Clothing, electronics and other purchases",
+                            IsActive = true,
                             Name = "Shopping",
                             Type = 2
                         },
@@ -73,6 +80,7 @@ namespace ExpenseTracker.Migrations
                         {
                             Id = 4,
                             Description = "Electricity, water, gas and internet",
+                            IsActive = true,
                             Name = "Utilities",
                             Type = 3
                         });
@@ -92,18 +100,21 @@ namespace ExpenseTracker.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime>("CreatedDateTime")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
                         .IsRequired()

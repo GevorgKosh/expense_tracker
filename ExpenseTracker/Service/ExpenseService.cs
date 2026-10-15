@@ -66,12 +66,12 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         if (filter.DateFrom is not null)
         {
-            query = query.Where(expense => expense.Date >= filter.DateFrom);
+            query = query.Where(expense => expense.ExpenseDate >= filter.DateFrom);
         }
 
         if (filter.DateTo is not null)
         {
-            query = query.Where(expense => expense.Date <= filter.DateTo);
+            query = query.Where(expense => expense.ExpenseDate <= filter.DateTo);
         }
 
         var expenses = await query.ToListAsync();
@@ -86,22 +86,52 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<bool>> Create(ExpenseRequest request)
     {
+        if (request.Amount <= 0)
+        {
+            return InvalidAmount();
+        }
+
+        if (request.Currency.Length != 3 || request.Currency.All(c => !char.IsLetter(c)))
+        {
+            return InvalidCurrency();
+        }
+
+        var category = await context.Categories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == request.CategoryId);
+        
+        if (category is null)
+        {
+            return InvalidCategory();
+        }
+
+        if (!category.IsActive)
+        {
+            return InactiveCategory();
+        }
+        
         var expense = mapper.Map<Expense>(request);
-        expense.Date = DateTime.UtcNow;
+        expense.Currency = request.Currency.ToUpperInvariant();
+        expense.CreatedDateTime = DateTime.UtcNow;
 
         context.Expenses.Add(expense);
-        var result = await context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status201Created,
             Message = "Expense created successfully",
-            Details = result > 0
+            Details = true
         };
     }
 
     public async Task<BaseResponse<bool>> Update(int id, ExpenseRequest request)
     {
+        if (request.Amount <= 0)
+        {
+            return InvalidAmount();
+        }
+
         var existing = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id);
         if (existing is null)
         {
@@ -150,6 +180,56 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
             Status = StatusCodes.Status404NotFound,
             Error = "Not Found",
             Message = $"Expense with id {id} not found"
+        };
+    }
+
+    private static BaseResponse<bool> InvalidAmount()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "Expense amount must be greater than zero"
+        };
+    }
+    
+    private static BaseResponse<bool> InvalidCurrency()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "Currency must contain exactly three uppercase letters"
+        };
+    }
+    
+    private static BaseResponse<bool> InvalidCategory()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "The selected category cannot be used for creating an expense"
+        };
+    }
+    
+    private static BaseResponse<bool> InactiveCategory()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "The selected category is inactive"
+        };
+    }
+    
+    private static BaseResponse<bool> InvalidDate()
+    {
+        return new BaseResponse<bool>
+        {
+            Status = StatusCodes.Status400BadRequest,
+            Error = "Bad Request",
+            Message = "The selected date cannot be more than one day from current day"
         };
     }
 }

@@ -77,14 +77,26 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
             return NotFound<bool>(id);
         }
 
-        context.Categories.Remove(category);
+        if (!category.IsActive)
+        {
+            return new BaseResponse<bool>
+            {
+                Status = StatusCodes.Status409Conflict,
+                Message = "Category is already inactive",
+                Details = false
+            };
+        }
+
+        category.IsActive = false;
+
+        context.Categories.Update(category);
         var result = await context.SaveChangesAsync();
 
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status200OK,
             Message = "Category deleted successfully",
-            Details = result > 0
+            Details = true
         };
     }
 

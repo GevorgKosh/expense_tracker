@@ -6,5 +6,6 @@ public class Category
     public CategoryType Type { get; set; }
     public string Name { get; set; }
     public string Description { get; set; }
+    public bool IsActive { get; set; } = true;
     public List<Expense> Expenses { get; set; }
 }
