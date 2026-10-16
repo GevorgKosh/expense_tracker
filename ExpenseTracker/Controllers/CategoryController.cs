@@ -6,34 +6,27 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ExpenseTracker.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("api/category")]
+[Route("api/categories")]
 public class CategoryController(ICategoryService service): ControllerBase
 {
-    [Authorize]
-    [HttpGet("categories")]
-    public async Task<ActionResult<BaseResponse<ICollection<CategoryResponse>>>> GetCategories()
+    [HttpGet]
+    public async Task<ActionResult<BaseResponse<ICollection<CategoryResponse>>>> GetCategories([FromQuery] bool includeInactive = true)
     {
-        var response = await service.GetCategories();
+        var response = await service.GetCategories(includeInactive);
 
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpPost]
     public async Task<ActionResult<BaseResponse<bool>>> CreateCategory(CategoryRequest category)
     {
-        await service.Create(category);
-        
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status201Created,
-            Message = "Category is successfully created",
-            Details = true
-        };
+        var response = await service.Create(category);
+
+        return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpGet("{id}")]
     public async Task<ActionResult<BaseResponse<CategoryResponse>>> GetByID([FromRoute] int id)
     {
@@ -42,7 +35,6 @@ public class CategoryController(ICategoryService service): ControllerBase
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpDelete("{id}")]
     public async Task<ActionResult<BaseResponse<bool>>> DeleteCategory([FromRoute] int id)
     {
@@ -51,7 +43,6 @@ public class CategoryController(ICategoryService service): ControllerBase
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpPut("{id}")]
     public async Task<ActionResult<BaseResponse<bool>>> UpdateCategory([FromRoute] int id, [FromBody] CategoryRequest category)
     {

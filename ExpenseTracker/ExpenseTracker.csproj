@@ -21,6 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Dto\common\" />
       <Folder Include="Exception\" />
       <Folder Include="Middleware\" />
     </ItemGroup>

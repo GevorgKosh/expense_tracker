@@ -8,9 +8,9 @@ namespace ExpenseTracker.Service;
 
 public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): ICategoryService
 {
-    public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories()
+    public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories(bool includeInactive)
     {
-        var categories = await context.Categories.ToListAsync();
+        var categories = await context.Categories.Where(c => includeInactive || c.IsActive).ToListAsync();
 
         return new BaseResponse<ICollection<CategoryResponse>>
         {
