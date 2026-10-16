@@ -25,7 +25,12 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return NotFound<CategoryResponse>(id);
+            return new BaseResponse<CategoryResponse>
+            {
+                Status = StatusCodes.Status404NotFound,
+                Message = "Category not found",
+                Details = null
+            };
         }
 
         return new BaseResponse<CategoryResponse>
@@ -81,7 +86,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
             return new BaseResponse<bool>
             {
                 Status = StatusCodes.Status404NotFound,
-                Message = "Category isn`t found",
+                Message = "Category is not found",
                 Details = false
             };
         }
@@ -128,12 +133,12 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         category.IsActive = false;
 
         context.Categories.Update(category);
-        var result = await context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status200OK,
-            Message = "Category deleted successfully",
+            Message = "Category is deactivated successfully",
             Details = true
         };
     }

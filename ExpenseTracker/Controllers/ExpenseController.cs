@@ -1,64 +1,67 @@
+using System.Security.Claims;
 using ExpenseTracker.Dto;
+using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ExpenseTracker.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("api/expense")]
+[Route("api/expenses")]
 public class ExpenseController(IExpenseService service): ControllerBase
 {
-    [Authorize]
     [HttpGet]
-    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetExpenseList()
+    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetExpenseList([FromQuery] ExpenseFilter filter)
     {
-        var response = await service.GetExpenses();
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.GetExpenses(userId, filter);
 
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
+    [HttpGet("summary")]
+    public async Task<ActionResult<BaseResponse<ExpenseSummary>>> GetSummary([FromQuery] DateOnly? dateFrom, [FromQuery] DateOnly? dateTo)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.GetSummary(userId, dateFrom, dateTo);
+
+        return StatusCode(response.Status, response);
+    }
+
     [HttpPost]
     public async Task<ActionResult<BaseResponse<bool>>> CreateExpense(ExpenseRequest request)
     {
-        var response = await service.Create(request);
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.Create(userId, request);
 
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpGet("{id:int}")]
     public async Task<ActionResult<BaseResponse<ExpenseResponse>>> GetExpenseById(int id)
     {
-        var response = await service.GetById(id);
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.GetById(userId, id);
 
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpDelete("{id:int}")]
     public async Task<ActionResult<BaseResponse<bool>>> DeleteExpense(int id)
     {
-        var response = await service.Delete(id);
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.Delete(userId, id);
 
         return StatusCode(response.Status, response);
     }
 
-    [Authorize]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<BaseResponse<bool>>> UpdateExpense(int id, ExpenseRequest request)
     {
-        var response = await service.Update(id, request);
-
-        return StatusCode(response.Status, response);
-    }
-
-    [Authorize]
-    [HttpGet("filter")]
-    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetFilteredExpenses([FromQuery] ExpenseFilter filter)
-    {
-        var response = await service.GetFiltered(filter);
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var response = await service.Update(userId, id, request);
 
         return StatusCode(response.Status, response);
     }

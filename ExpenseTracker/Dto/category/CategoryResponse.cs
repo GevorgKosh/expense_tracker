@@ -1,3 +1,5 @@
+using ExpenseTracker.Dto.expense;
+
 namespace ExpenseTracker.Dto;
 
 public class CategoryResponse

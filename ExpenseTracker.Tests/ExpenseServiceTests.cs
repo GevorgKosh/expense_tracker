@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
+using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Http;
@@ -30,7 +31,7 @@ public class ExpenseServiceTests
             CategoryId = categoryId
         };
 
-        var response = await service.Create(request);
+        var response = await service.Create(1, request);
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
         Assert.Equal("The selected category is inactive", response.Message);
@@ -54,7 +55,7 @@ public class ExpenseServiceTests
             CategoryId = 1
         };
 
-        var response = await service.Create(request);
+        var response = await service.Create(1, request);
 
         Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
         Assert.False(response.Details);
@@ -66,7 +67,7 @@ public class ExpenseServiceTests
     [InlineData("2026-03-15", null, new[] { 3, 4 })]
     [InlineData(null, "2026-03-01", new[] { 1, 2 })]
     [InlineData("2026-05-01", "2026-05-31", new int[0])]
-    public async Task GetFiltered_ByDate_ReturnsExpensesWithinRange(string? dateFrom, string? dateTo, int[] expectedIds)
+    public async Task GetExpenses_ByDate_ReturnsExpensesWithinRange(string? dateFrom, string? dateTo, int[] expectedIds)
     {
         await using var context = CreateContext();
         context.Expenses.AddRange(
@@ -83,10 +84,324 @@ public class ExpenseServiceTests
             DateTo = dateTo is null ? null : DateTime.Parse(dateTo)
         };
 
-        var response = await service.GetFiltered(filter);
+        var response = await service.GetExpenses(1, filter);
 
         Assert.Equal(StatusCodes.Status200OK, response.Status);
         Assert.Equal(expectedIds, response.Details.Select(e => e.Id).Order());
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithMultipleFilters_AppliesAllOfThem()
+    {
+        await using var context = CreateContext();
+        var matching = CreateExpense(1, new DateTime(2026, 7, 10));
+        matching.Currency = "AMD";
+        matching.Amount = 8500;
+        var wrongCategory = CreateExpense(2, new DateTime(2026, 7, 10));
+        wrongCategory.Currency = "AMD";
+        wrongCategory.Amount = 8500;
+        wrongCategory.CategoryId = 2;
+        var wrongCurrency = CreateExpense(3, new DateTime(2026, 7, 10));
+        wrongCurrency.Amount = 8500;
+        var tooSmall = CreateExpense(4, new DateTime(2026, 7, 10));
+        tooSmall.Currency = "AMD";
+        tooSmall.Amount = 500;
+        var outsideDates = CreateExpense(5, new DateTime(2026, 8, 1));
+        outsideDates.Currency = "AMD";
+        outsideDates.Amount = 8500;
+        context.Expenses.AddRange(matching, wrongCategory, wrongCurrency, tooSmall, outsideDates);
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+        var filter = new ExpenseFilter
+        {
+            CategoryId = 1,
+            Currency = "amd",
+            MinimumAmount = 1000,
+            MaximumAmount = 10000,
+            DateFrom = new DateTime(2026, 7, 1),
+            DateTo = new DateTime(2026, 7, 31)
+        };
+
+        var response = await service.GetExpenses(1, filter);
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        var expense = Assert.Single(response.Details);
+        Assert.Equal(1, expense.Id);
+        Assert.Equal("Food", expense.CategoryName);
+    }
+
+    [Fact]
+    public async Task GetExpenses_ReturnsOnlyCurrentUsersExpenses()
+    {
+        await using var context = CreateContext();
+        var otherUsersExpense = CreateExpense(2, new DateTime(2026, 7, 10));
+        otherUsersExpense.UserId = 2;
+        context.Expenses.AddRange(CreateExpense(1, new DateTime(2026, 7, 10)), otherUsersExpense);
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetExpenses(1, new ExpenseFilter());
+
+        Assert.Equal(1, Assert.Single(response.Details).Id);
+    }
+
+    [Fact]
+    public async Task GetExpenses_ByDateTo_IncludesExpensesLaterOnTheLastDay()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(1, new DateTime(2026, 7, 31, 18, 0, 0)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetExpenses(1, new ExpenseFilter { DateTo = new DateTime(2026, 7, 31) });
+
+        Assert.Single(response.Details);
+    }
+
+    [Fact]
+    public async Task GetById_ReturnsCategoryNameAndDates()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetById(1, 10);
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        Assert.Equal("Food", response.Details.CategoryName);
+        Assert.Equal(new DateOnly(2026, 7, 17), response.Details.ExpenseDate);
+        Assert.Equal(new DateTime(2026, 3, 15), response.Details.CreatedAt);
+    }
+
+    [Fact]
+    public async Task GetById_ForAnotherUsersExpense_ReturnsNotFound()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetById(2, 10);
+
+        Assert.Equal(StatusCodes.Status404NotFound, response.Status);
+    }
+
+    [Fact]
+    public async Task Update_UpdatesAllFields()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+        var request = CreateUpdateRequest(categoryId: 2);
+
+        var response = await service.Update(1, 10, request);
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        var expense = await context.Expenses.AsNoTracking().SingleAsync(e => e.Id == 10);
+        Assert.Equal("updated_description", expense.Description);
+        Assert.Equal(8500, expense.Amount);
+        Assert.Equal("AMD", expense.Currency);
+        Assert.Equal(new DateTime(2026, 7, 18), expense.ExpenseDate);
+        Assert.Equal(2, expense.CategoryId);
+        Assert.Equal("expense_10", expense.Name);
+    }
+
+    [Fact]
+    public async Task Update_ForAnotherUsersExpense_ReturnsNotFound()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.Update(2, 10, CreateUpdateRequest(categoryId: 1));
+
+        Assert.Equal(StatusCodes.Status404NotFound, response.Status);
+        var expense = await context.Expenses.AsNoTracking().SingleAsync(e => e.Id == 10);
+        Assert.Equal("USD", expense.Currency);
+    }
+
+    [Theory]
+    [InlineData("XX1", 1)]
+    [InlineData("AMD", 999)]
+    public async Task Update_WithInvalidCurrencyOrCategory_IsRejected(string currency, int categoryId)
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+        var request = CreateUpdateRequest(categoryId);
+        request.Currency = currency;
+
+        var response = await service.Update(1, 10, request);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+    }
+
+    [Fact]
+    public async Task Update_WithFutureDate_IsRejected()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+        var request = CreateUpdateRequest(categoryId: 1);
+        request.ExpenseDate = DateTime.UtcNow.Date.AddDays(2);
+
+        var response = await service.Update(1, 10, request);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+    }
+
+    [Theory]
+    [InlineData(2, StatusCodes.Status400BadRequest)]
+    [InlineData(1, StatusCodes.Status200OK)]
+    public async Task Update_WithInactiveCategory_IsOnlyAllowedForCurrentCategory(int inactiveCategoryId, int expectedStatus)
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        var category = await context.Categories.SingleAsync(c => c.Id == inactiveCategoryId);
+        category.IsActive = false;
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.Update(1, 10, CreateUpdateRequest(inactiveCategoryId));
+
+        Assert.Equal(expectedStatus, response.Status);
+    }
+
+    private static ExpenseRequest CreateUpdateRequest(int categoryId)
+    {
+        return new ExpenseRequest
+        {
+            Description = "updated_description",
+            Amount = 8500,
+            Currency = "amd",
+            ExpenseDate = new DateTime(2026, 7, 18),
+            CategoryId = categoryId
+        };
+    }
+
+    [Theory]
+    [InlineData(1, StatusCodes.Status200OK, false)]
+    [InlineData(2, StatusCodes.Status404NotFound, true)]
+    public async Task Delete_RemovesOnlyCurrentUsersExpense(int userId, int expectedStatus, bool expenseRemains)
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.Delete(userId, 10);
+
+        Assert.Equal(expectedStatus, response.Status);
+        Assert.Equal(expenseRemains, await context.Expenses.AnyAsync(e => e.Id == 10));
+    }
+
+    [Fact]
+    public async Task GetSummary_ReturnsTotalsGroupedByCategory()
+    {
+        await using var context = CreateContext();
+        var lunch = CreateExpense(1, new DateTime(2026, 7, 1));
+        lunch.Amount = 15000;
+        var dinner = CreateExpense(2, new DateTime(2026, 7, 31, 20, 0, 0));
+        dinner.Amount = 20000;
+        var taxi = CreateExpense(3, new DateTime(2026, 7, 15));
+        taxi.Amount = 40000;
+        taxi.CategoryId = 2;
+        var outsidePeriod = CreateExpense(4, new DateTime(2026, 8, 1));
+        var otherUser = CreateExpense(5, new DateTime(2026, 7, 15));
+        otherUser.UserId = 2;
+        otherUser.Currency = "EUR";
+        context.Expenses.AddRange(lunch, dinner, taxi, outsidePeriod, otherUser);
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        var summary = response.Details;
+        Assert.Equal(new DateOnly(2026, 7, 1), summary.DateFrom);
+        Assert.Equal(new DateOnly(2026, 7, 31), summary.DateTo);
+        Assert.Equal(3, summary.ExpenseCount);
+        Assert.Equal(75000, summary.TotalAmount);
+        Assert.Equal("USD", summary.Currency);
+        Assert.Collection(summary.Categories,
+            food =>
+            {
+                Assert.Equal(1, food.CategoryId);
+                Assert.Equal("Food", food.CategoryName);
+                Assert.Equal(35000, food.TotalAmount);
+            },
+            transportation =>
+            {
+                Assert.Equal(2, transportation.CategoryId);
+                Assert.Equal("Transportation", transportation.CategoryName);
+                Assert.Equal(40000, transportation.TotalAmount);
+            });
+    }
+
+    [Fact]
+    public async Task GetSummary_WithMixedCurrencies_IsRejected()
+    {
+        await using var context = CreateContext();
+        var amd = CreateExpense(1, new DateTime(2026, 7, 10));
+        amd.Currency = "AMD";
+        context.Expenses.AddRange(amd, CreateExpense(2, new DateTime(2026, 7, 11)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+        Assert.Contains("AMD, USD", response.Message);
+    }
+
+    [Theory]
+    [InlineData(null, "2026-07-31")]
+    [InlineData("2026-07-01", null)]
+    [InlineData("2026-07-31", "2026-07-01")]
+    public async Task GetSummary_WithMissingOrReversedDates_IsRejected(string? dateFrom, string? dateTo)
+    {
+        await using var context = CreateContext();
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetSummary(
+            1,
+            dateFrom is null ? null : DateOnly.Parse(dateFrom),
+            dateTo is null ? null : DateOnly.Parse(dateTo));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+    }
+
+    [Fact]
+    public async Task GetSummary_WithNoExpenses_ReturnsEmptySummary()
+    {
+        await using var context = CreateContext();
+        var service = new ExpenseService(context, CreateMapper());
+
+        var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+        Assert.Equal(0, response.Details.ExpenseCount);
+        Assert.Equal(0, response.Details.TotalAmount);
+        Assert.Null(response.Details.Currency);
+        Assert.Empty(response.Details.Categories);
     }
 
     private static Expense CreateExpense(int id, DateTime expenseDate)

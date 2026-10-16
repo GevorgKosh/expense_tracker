@@ -1,11 +1,11 @@
-namespace ExpenseTracker.Dto;
+namespace ExpenseTracker.Dto.expense;
 
 public class ExpenseRequest
 {
-    public string Name { get; set; }
+    public string? Name { get; set; }
     public string Description { get; set; }
     public Double Amount { get; set; }
     public string Currency { get; set; } = string.Empty;
-    public CategoryResponse? ExpenseDate { get; set; }
+    public DateTime ExpenseDate { get; set; }
     public int CategoryId { get; set; }
 }

@@ -3,10 +3,9 @@
 public class ExpenseFilter
 {
     public int? CategoryId { get; set; }
-    public int? UserId { get; set; }
     public DateTime? DateFrom { get; set; }
     public DateTime? DateTo { get; set; }
     public string? Currency { get; set; }
-    public Double? MinAmount { get; set; }
-    public Double? MaxAmount { get; set; }
+    public Double? MinimumAmount { get; set; }
+    public Double? MaximumAmount { get; set; }
 }
