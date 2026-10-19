@@ -1,6 +1,7 @@
 using System.Text;
 using ExpenseTracker.Data;
 using ExpenseTracker.Mapping;
+using ExpenseTracker.Middleware;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -51,8 +52,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService,  AuthService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
+builder.Services.AddExceptionHandler<ExpenseExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
+app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

@@ -5,6 +5,7 @@ using System.Text;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.user;
+using ExpenseTracker.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -18,12 +19,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         var isExist = await context.User.AnyAsync(u => u.Name == request.UserName);
         if (isExist)
         {
-            return new BaseResponse<UserResponse>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Error = "Conflict",
-                Message = "User with such name already exists"
-            };
+            throw new ConflictException("User with such name already exists");
         }
 
         var user = new User();
@@ -50,12 +46,7 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         var user = await context.User.FirstOrDefaultAsync(u => u.Name == request.UserName);
         if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
         {
-            return new BaseResponse<LoginResponse>
-            {
-                Status = StatusCodes.Status401Unauthorized,
-                Error = "Unauthorized",
-                Message = "Incorrect username or password"
-            };
+            throw new UnauthorizedException("Incorrect username or password");
         }
 
         var token = await CreateTokenModel(user);

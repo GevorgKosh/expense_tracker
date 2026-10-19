@@ -2,6 +2,7 @@ using AutoMapper;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
+using ExpenseTracker.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
@@ -25,12 +26,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return new BaseResponse<CategoryResponse>
-            {
-                Status = StatusCodes.Status404NotFound,
-                Message = "Category not found",
-                Details = null
-            };
+            throw new NotFoundException($"Category with id {id} not found");
         }
 
         return new BaseResponse<CategoryResponse>
@@ -46,23 +42,13 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var isNameAlreadyExist = await context.Categories.AnyAsync(c => c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
         if (isNameAlreadyExist)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Message = "Category already exist",
-                Details = false
-            };
+            throw new ConflictException("Category already exist");
         }
-        
+
         var isTypeAlreadyExist = await context.Categories.AnyAsync(c => c.Type ==  request.Type);
         if (isTypeAlreadyExist)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Message = "Category type already exist",
-                Details = false
-            };
+            throw new ConflictException("Category type already exist");
         }
         
         var category = mapper.Map<Category>(request);
@@ -83,23 +69,13 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status404NotFound,
-                Message = "Category is not found",
-                Details = false
-            };
+            throw new NotFoundException($"Category with id {id} not found");
         }
-        
+
         var restrictUpdating = await context.Categories.AnyAsync(c => c.Id != id && c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
         if (restrictUpdating)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Message = "Category with such name is already exist",
-                Details = false
-            };
+            throw new ConflictException("Category with such name is already exist");
         }
         mapper.Map(request, category);
         await context.SaveChangesAsync();
@@ -117,17 +93,12 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Category with id {id} not found");
         }
 
         if (!category.IsActive)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Message = "Category is already inactive",
-                Details = false
-            };
+            throw new ConflictException("Category is already inactive");
         }
 
         category.IsActive = false;
@@ -140,16 +111,6 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
             Status = StatusCodes.Status200OK,
             Message = "Category is deactivated successfully",
             Details = true
-        };
-    }
-
-    private static BaseResponse<T> NotFound<T>(int id)
-    {
-        return new BaseResponse<T>
-        {
-            Status = StatusCodes.Status404NotFound,
-            Error = "Not Found",
-            Message = $"Category with id {id} not found"
         };
     }
 }

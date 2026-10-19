@@ -3,6 +3,7 @@ using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
 using ExpenseTracker.Dto.expense;
+using ExpenseTracker.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
@@ -17,7 +18,7 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
             .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (expense is null)
         {
-            return NotFound<ExpenseResponse>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
         return new BaseResponse<ExpenseResponse>
@@ -83,16 +84,15 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
     {
         if (dateFrom is null || dateTo is null)
         {
-            return InvalidSummaryRequest("Both dateFrom and dateTo are required");
+            throw new BadRequestException("Both dateFrom and dateTo are required");
         }
 
         if (dateFrom > dateTo)
         {
-            return InvalidSummaryRequest("dateFrom cannot be later than dateTo");
+            throw new BadRequestException("dateFrom cannot be later than dateTo");
         }
 
         var from = dateFrom.Value.ToDateTime(TimeOnly.MinValue);
-        // Exclusive upper bound so expenses later on the last day are included
         var toExclusive = dateTo.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
 
         var groups = await context.Expenses
@@ -112,7 +112,7 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         var currencies = groups.Select(group => group.Currency).Distinct().ToList();
         if (currencies.Count > 1)
         {
-            return InvalidSummaryRequest(
+            throw new BadRequestException(
                 $"All expenses in the selected period must have the same currency, found: {string.Join(", ", currencies.Order())}");
         }
 
@@ -142,22 +142,13 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<bool>> Create(int userId, ExpenseRequest request)
     {
-        var invalidFields = ValidateFields(request);
-        if (invalidFields is not null)
-        {
-            return invalidFields;
-        }
-
-        var invalidCategory = await ValidateCategory(request.CategoryId, currentCategoryId: null);
-        if (invalidCategory is not null)
-        {
-            return invalidCategory;
-        }
+        ValidateFields(request);
+        await ValidateCategory(request.CategoryId, currentCategoryId: null);
 
         var expense = mapper.Map<Expense>(request);
         expense.Name = request.Name ?? string.Empty;
         expense.UserId = userId;
-        expense.Currency = request.Currency.ToUpperInvariant();
+        expense.Currency = request.Currency;
         expense.CreatedDateTime = DateTime.UtcNow;
 
         context.Expenses.Add(expense);
@@ -173,28 +164,20 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<bool>> Update(int userId, int id, ExpenseRequest request)
     {
-        var invalidFields = ValidateFields(request);
-        if (invalidFields is not null)
-        {
-            return invalidFields;
-        }
+        ValidateFields(request);
 
         var existing = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (existing is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
-        var invalidCategory = await ValidateCategory(request.CategoryId, existing.CategoryId);
-        if (invalidCategory is not null)
-        {
-            return invalidCategory;
-        }
+        await ValidateCategory(request.CategoryId, existing.CategoryId);
 
         existing.Name = request.Name ?? existing.Name;
         existing.Description = request.Description;
         existing.Amount = request.Amount;
-        existing.Currency = request.Currency.ToUpperInvariant();
+        existing.Currency = request.Currency;
         existing.ExpenseDate = request.ExpenseDate;
         existing.CategoryId = request.CategoryId;
 
@@ -213,7 +196,7 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         var expense = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (expense is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
         context.Expenses.Remove(expense);
@@ -227,28 +210,25 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         };
     }
 
-    private static BaseResponse<bool>? ValidateFields(ExpenseRequest request)
+    private static void ValidateFields(ExpenseRequest request)
     {
         if (request.Amount <= 0)
         {
-            return InvalidAmount();
+            throw new BadRequestException("Expense amount must be greater than zero");
         }
 
-        if (request.Currency.Length != 3 || request.Currency.Any(c => !char.IsAsciiLetter(c)))
+        if (request.Currency.Length != 3 || request.Currency.Any(c => !char.IsAsciiLetterUpper(c)))
         {
-            return InvalidCurrency();
+            throw new BadRequestException("Currency must contain exactly three uppercase letters (e.g. AMD, USD, EUR)");
         }
 
         if (request.ExpenseDate.Date > DateTime.UtcNow.Date.AddDays(1))
         {
-            return InvalidDate();
+            throw new BadRequestException("The selected date cannot be more than one day from current day");
         }
-
-        return null;
     }
-
-    // An expense may stay in its current category even if that category was deactivated later
-    private async Task<BaseResponse<bool>?> ValidateCategory(int categoryId, int? currentCategoryId)
+    
+    private async Task ValidateCategory(int categoryId, int? currentCategoryId)
     {
         var category = await context.Categories
             .AsNoTracking()
@@ -256,84 +236,12 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         if (category is null)
         {
-            return InvalidCategory();
+            throw new BadRequestException("The selected category does not exist");
         }
 
         if (!category.IsActive && category.Id != currentCategoryId)
         {
-            return InactiveCategory();
+            throw new BadRequestException("The selected category is inactive");
         }
-
-        return null;
-    }
-
-    private static BaseResponse<T> NotFound<T>(int id)
-    {
-        return new BaseResponse<T>
-        {
-            Status = StatusCodes.Status404NotFound,
-            Error = "Not Found",
-            Message = $"Expense with id {id} not found"
-        };
-    }
-
-    private static BaseResponse<ExpenseSummary> InvalidSummaryRequest(string message)
-    {
-        return new BaseResponse<ExpenseSummary>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = message
-        };
-    }
-
-    private static BaseResponse<bool> InvalidAmount()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "Expense amount must be greater than zero"
-        };
-    }
-    
-    private static BaseResponse<bool> InvalidCurrency()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "Currency must contain exactly three letters"
-        };
-    }
-    
-    private static BaseResponse<bool> InvalidCategory()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected category does not exist"
-        };
-    }
-    
-    private static BaseResponse<bool> InactiveCategory()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected category is inactive"
-        };
-    }
-    
-    private static BaseResponse<bool> InvalidDate()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected date cannot be more than one day from current day"
-        };
     }
 }
