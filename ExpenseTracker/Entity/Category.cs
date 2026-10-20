@@ -1,4 +1,6 @@
-﻿namespace ExpenseTracker.Dto;
+﻿using ExpenseTracker.Dto;
+
+namespace ExpenseTracker.Entity;
 
 public class Category
 {

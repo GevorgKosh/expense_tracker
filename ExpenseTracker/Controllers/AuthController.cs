@@ -1,6 +1,4 @@
-﻿using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
-using ExpenseTracker.Dto.user;
+﻿using ExpenseTracker.Dto.user;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Mvc;
 

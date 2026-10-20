@@ -1,4 +1,4 @@
-﻿namespace ExpenseTracker.Dto;
+﻿namespace ExpenseTracker.Dto.expense;
 
 public class ExpenseFilter
 {

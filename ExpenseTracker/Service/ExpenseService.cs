@@ -1,8 +1,8 @@
 using AutoMapper;
 using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
 using ExpenseTracker.Dto.expense;
+using ExpenseTracker.Entity;
 using ExpenseTracker.Exceptions;
 using Microsoft.EntityFrameworkCore;
 

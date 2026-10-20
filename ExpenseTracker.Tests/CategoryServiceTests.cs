@@ -1,7 +1,7 @@
 using AutoMapper;
 using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
+using ExpenseTracker.Entity;
 using ExpenseTracker.Exceptions;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;

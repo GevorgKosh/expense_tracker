@@ -1,4 +1,4 @@
-﻿namespace ExpenseTracker.Dto;
+﻿namespace ExpenseTracker.Entity;
 
 public class Expense
 {
