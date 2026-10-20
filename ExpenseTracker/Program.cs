@@ -1,5 +1,6 @@
 using System.Text;
 using ExpenseTracker.Data;
+using ExpenseTracker.Exceptions;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Middleware;
 using ExpenseTracker.Service;
@@ -11,7 +12,9 @@ using Microsoft.OpenApi;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddValidation();
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+        options.InvalidModelStateResponseFactory = ValidationErrorResponse.Create);
 builder.Services.AddHttpLogging();
 builder.Services.AddOpenApi();
 builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
@@ -45,6 +48,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["AppSettings:Issuer"],
             ValidAudience = builder.Configuration["AppSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["AppSettings:Token"]!))
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                if (context.Response.HasStarted) return;
+
+                var message = context.AuthenticateFailure is SecurityTokenExpiredException
+                    ? "Access token has expired"
+                    : "Authentication is required to access this resource";
+
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new BaseResponse<object>
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Error = ErrorCodes.Unauthorized,
+                    Message = message
+                });
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new BaseResponse<object>
+                {
+                    Status = StatusCodes.Status403Forbidden,
+                    Error = ErrorCodes.Forbidden,
+                    Message = "You do not have permission to access this resource"
+                });
+            }
         };
     });
 

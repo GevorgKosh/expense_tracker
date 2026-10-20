@@ -36,11 +36,11 @@ public class CategoryController(ICategoryService service): ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult<BaseResponse<bool>>> DeleteCategory([FromRoute] int id)
+    public async Task<IActionResult> DeleteCategory([FromRoute] int id)
     {
-        var response = await service.Delete(id);
+        await service.Delete(id);
 
-        return StatusCode(response.Status, response);
+        return NoContent();
     }
 
     [HttpPut("{id}")]

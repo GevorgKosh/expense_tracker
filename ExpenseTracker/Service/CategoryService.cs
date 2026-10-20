@@ -88,7 +88,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         };
     }
 
-    public async Task<BaseResponse<bool>> Delete(int id)
+    public async Task Delete(int id)
     {
         var category = await context.Categories.FindAsync(id);
         if (category is null)
@@ -105,12 +105,5 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
         context.Categories.Update(category);
         await context.SaveChangesAsync();
-
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status200OK,
-            Message = "Category is deactivated successfully",
-            Details = true
-        };
     }
 }

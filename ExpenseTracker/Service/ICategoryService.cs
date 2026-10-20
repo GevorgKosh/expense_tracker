@@ -9,5 +9,5 @@ public interface ICategoryService
     Task<BaseResponse<CategoryResponse>> GetById(int id);
     Task<BaseResponse<bool>> Create(CategoryRequest request);
     Task<BaseResponse<bool>> Update(int id, CategoryRequest request);
-    Task<BaseResponse<bool>> Delete(int id);
+    Task Delete(int id);
 }

@@ -49,12 +49,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<ActionResult<BaseResponse<bool>>> DeleteExpense(int id)
+    public async Task<IActionResult> DeleteExpense(int id)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var response = await service.Delete(userId, id);
+        await service.Delete(userId, id);
 
-        return StatusCode(response.Status, response);
+        return NoContent();
     }
 
     [HttpPut("{id:int}")]

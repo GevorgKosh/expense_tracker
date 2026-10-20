@@ -10,5 +10,5 @@ public interface IExpenseService
     Task<BaseResponse<ExpenseSummary>> GetSummary(int userId, DateOnly? dateFrom, DateOnly? dateTo);
     Task<BaseResponse<bool>> Create(int userId, ExpenseRequest request);
     Task<BaseResponse<bool>> Update(int userId, int id, ExpenseRequest request);
-    Task<BaseResponse<bool>> Delete(int userId, int id);
+    Task Delete(int userId, int id);
 }

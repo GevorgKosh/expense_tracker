@@ -2,9 +2,9 @@ using AutoMapper;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
+using ExpenseTracker.Exceptions;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,10 +22,8 @@ public class CategoryServiceTests
         var service = new CategoryService(context, CreateMapper());
         var request = new CategoryRequest { Type = CategoryType.Food, Name = name, Description = "test" };
 
-        var response = await service.Create(request);
+        await Assert.ThrowsAsync<ConflictException>(() => service.Create(request));
 
-        Assert.Equal(StatusCodes.Status409Conflict, response.Status);
-        Assert.False(response.Details);
         Assert.Equal(1, await context.Categories.CountAsync(c => c.Name.Trim().ToLower() == "food"));
     }
 

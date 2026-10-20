@@ -2,6 +2,7 @@
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.expense;
+using ExpenseTracker.Exceptions;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Http;
@@ -31,11 +32,9 @@ public class ExpenseServiceTests
             CategoryId = categoryId
         };
 
-        var response = await service.Create(1, request);
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.Create(1, request));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
-        Assert.Equal("The selected category is inactive", response.Message);
-        Assert.False(response.Details);
+        Assert.Equal(["The selected category is inactive."], exception.Errors["categoryId"]);
         Assert.False(await context.Expenses.AnyAsync());
     }
     
@@ -52,13 +51,14 @@ public class ExpenseServiceTests
             Name = "test_name",
             Description = "test_description",
             Amount = amount,
+            Currency = "USD",
             CategoryId = 1
         };
 
-        var response = await service.Create(1, request);
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.Create(1, request));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
-        Assert.False(response.Details);
+        Assert.Equal(["Amount must be greater than zero."], exception.Errors["amount"]);
+        Assert.Single(exception.Errors);
         Assert.False(await context.Expenses.AnyAsync());
     }
 
@@ -187,9 +187,7 @@ public class ExpenseServiceTests
 
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.GetById(2, 10);
-
-        Assert.Equal(StatusCodes.Status404NotFound, response.Status);
+        await Assert.ThrowsAsync<NotFoundException>(() => service.GetById(2, 10));
     }
 
     [Fact]
@@ -223,17 +221,15 @@ public class ExpenseServiceTests
 
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.Update(2, 10, CreateUpdateRequest(categoryId: 1));
-
-        Assert.Equal(StatusCodes.Status404NotFound, response.Status);
+        await Assert.ThrowsAsync<NotFoundException>(() => service.Update(2, 10, CreateUpdateRequest(categoryId: 1)));
         var expense = await context.Expenses.AsNoTracking().SingleAsync(e => e.Id == 10);
         Assert.Equal("USD", expense.Currency);
     }
 
     [Theory]
-    [InlineData("XX1", 1)]
-    [InlineData("AMD", 999)]
-    public async Task Update_WithInvalidCurrencyOrCategory_IsRejected(string currency, int categoryId)
+    [InlineData("XX1", 1, "currency")]
+    [InlineData("AMD", 999, "categoryId")]
+    public async Task Update_WithInvalidCurrencyOrCategory_IsRejected(string currency, int categoryId, string invalidField)
     {
         await using var context = CreateContext();
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
@@ -243,9 +239,9 @@ public class ExpenseServiceTests
         var request = CreateUpdateRequest(categoryId);
         request.Currency = currency;
 
-        var response = await service.Update(1, 10, request);
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.Update(1, 10, request));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+        Assert.Equal([invalidField], exception.Errors.Keys);
     }
 
     [Fact]
@@ -259,27 +255,45 @@ public class ExpenseServiceTests
         var request = CreateUpdateRequest(categoryId: 1);
         request.ExpenseDate = DateTime.UtcNow.Date.AddDays(2);
 
-        var response = await service.Update(1, 10, request);
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.Update(1, 10, request));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+        Assert.True(exception.Errors.ContainsKey("expenseDate"));
     }
 
-    [Theory]
-    [InlineData(2, StatusCodes.Status400BadRequest)]
-    [InlineData(1, StatusCodes.Status200OK)]
-    public async Task Update_WithInactiveCategory_IsOnlyAllowedForCurrentCategory(int inactiveCategoryId, int expectedStatus)
+    [Fact]
+    public async Task Update_WithInactiveCategory_IsAllowedForCurrentCategory()
     {
         await using var context = CreateContext();
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
-        var category = await context.Categories.SingleAsync(c => c.Id == inactiveCategoryId);
-        category.IsActive = false;
-        await context.SaveChangesAsync();
+        await DeactivateCategory(context, 1);
 
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.Update(1, 10, CreateUpdateRequest(inactiveCategoryId));
+        var response = await service.Update(1, 10, CreateUpdateRequest(categoryId: 1));
 
-        Assert.Equal(expectedStatus, response.Status);
+        Assert.Equal(StatusCodes.Status200OK, response.Status);
+    }
+
+    [Fact]
+    public async Task Update_WithInactiveCategory_IsRejectedForAnotherCategory()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await DeactivateCategory(context, 2);
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        var exception = await Assert.ThrowsAsync<ValidationException>(
+            () => service.Update(1, 10, CreateUpdateRequest(categoryId: 2)));
+
+        Assert.True(exception.Errors.ContainsKey("categoryId"));
+    }
+
+    private static async Task DeactivateCategory(ExpenseTrackerDbContext context, int categoryId)
+    {
+        var category = await context.Categories.SingleAsync(c => c.Id == categoryId);
+        category.IsActive = false;
+        await context.SaveChangesAsync();
     }
 
     private static ExpenseRequest CreateUpdateRequest(int categoryId)
@@ -288,16 +302,14 @@ public class ExpenseServiceTests
         {
             Description = "updated_description",
             Amount = 8500,
-            Currency = "amd",
+            Currency = "AMD",
             ExpenseDate = new DateTime(2026, 7, 18),
             CategoryId = categoryId
         };
     }
 
-    [Theory]
-    [InlineData(1, StatusCodes.Status200OK, false)]
-    [InlineData(2, StatusCodes.Status404NotFound, true)]
-    public async Task Delete_RemovesOnlyCurrentUsersExpense(int userId, int expectedStatus, bool expenseRemains)
+    [Fact]
+    public async Task Delete_RemovesExpense()
     {
         await using var context = CreateContext();
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
@@ -305,10 +317,23 @@ public class ExpenseServiceTests
 
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.Delete(userId, 10);
+        await service.Delete(1, 10);
 
-        Assert.Equal(expectedStatus, response.Status);
-        Assert.Equal(expenseRemains, await context.Expenses.AnyAsync(e => e.Id == 10));
+        Assert.False(await context.Expenses.AnyAsync(e => e.Id == 10));
+    }
+
+    [Fact]
+    public async Task Delete_ForAnotherUsersExpense_ThrowsNotFound()
+    {
+        await using var context = CreateContext();
+        context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper());
+
+        await Assert.ThrowsAsync<NotFoundException>(() => service.Delete(2, 10));
+
+        Assert.True(await context.Expenses.AnyAsync(e => e.Id == 10));
     }
 
     [Fact]
@@ -366,27 +391,27 @@ public class ExpenseServiceTests
 
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
+        var exception = await Assert.ThrowsAsync<BadRequestException>(
+            () => service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31)));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
-        Assert.Contains("AMD, USD", response.Message);
+        Assert.Contains("AMD, USD", exception.Message);
     }
 
     [Theory]
-    [InlineData(null, "2026-07-31")]
-    [InlineData("2026-07-01", null)]
-    [InlineData("2026-07-31", "2026-07-01")]
-    public async Task GetSummary_WithMissingOrReversedDates_IsRejected(string? dateFrom, string? dateTo)
+    [InlineData(null, "2026-07-31", "dateFrom")]
+    [InlineData("2026-07-01", null, "dateTo")]
+    [InlineData("2026-07-31", "2026-07-01", "dateFrom")]
+    public async Task GetSummary_WithMissingOrReversedDates_IsRejected(string? dateFrom, string? dateTo, string invalidField)
     {
         await using var context = CreateContext();
         var service = new ExpenseService(context, CreateMapper());
 
-        var response = await service.GetSummary(
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.GetSummary(
             1,
             dateFrom is null ? null : DateOnly.Parse(dateFrom),
-            dateTo is null ? null : DateOnly.Parse(dateTo));
+            dateTo is null ? null : DateOnly.Parse(dateTo)));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, response.Status);
+        Assert.Equal([invalidField], exception.Errors.Keys);
     }
 
     [Fact]

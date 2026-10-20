@@ -1,6 +1,5 @@
 ﻿using ExpenseTracker.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.WebUtilities;
 
 namespace ExpenseTracker.Middleware;
 
@@ -14,28 +13,29 @@ public class ExpenseExceptionHandler(ILogger<ExpenseExceptionHandler> logger): I
             return false;
         }
 
-        var (status, message) = exception switch
+        (int status, string error, string message, object? details) = exception switch
         {
-            NotFoundException => (StatusCodes.Status404NotFound, exception.Message),
-            BadRequestException => (StatusCodes.Status400BadRequest, exception.Message),
-            ConflictException   => (StatusCodes.Status409Conflict,   exception.Message),
-            UnauthorizedException => (StatusCodes.Status401Unauthorized, exception.Message),
-            _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
+            ValidationException validation => (StatusCodes.Status400BadRequest, ErrorCodes.ValidationError, validation.Message, validation.Errors),
+            BadRequestException   => (StatusCodes.Status400BadRequest,   ErrorCodes.BadRequest,   exception.Message, null),
+            NotFoundException     => (StatusCodes.Status404NotFound,     ErrorCodes.NotFound,     exception.Message, null),
+            ConflictException     => (StatusCodes.Status409Conflict,     ErrorCodes.Conflict,     exception.Message, null),
+            UnauthorizedException => (StatusCodes.Status401Unauthorized, ErrorCodes.Unauthorized, exception.Message, null),
+            _ => (StatusCodes.Status500InternalServerError, ErrorCodes.InternalServerError, "An unexpected error occurred", null)
         };
-        
+
         if (status == StatusCodes.Status500InternalServerError)
             logger.LogError(exception, "Unhandled exception");
         else
             logger.LogWarning("Handled exception: {Message}", exception.Message);
 
         httpContext.Response.StatusCode = status;
-        
+
         await httpContext.Response.WriteAsJsonAsync(new BaseResponse<object>
         {
             Status = status,
-            Error = ReasonPhrases.GetReasonPhrase(status),
+            Error = error,
             Message = message,
-            Details = null
+            Details = details
         }, cancellationToken);
 
         return true;

@@ -82,18 +82,29 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
     public async Task<BaseResponse<ExpenseSummary>> GetSummary(int userId, DateOnly? dateFrom, DateOnly? dateTo)
     {
-        if (dateFrom is null || dateTo is null)
+        var errors = new Dictionary<string, string[]>();
+        if (dateFrom is null)
         {
-            throw new BadRequestException("Both dateFrom and dateTo are required");
+            errors["dateFrom"] = ["dateFrom is required."];
+        }
+
+        if (dateTo is null)
+        {
+            errors["dateTo"] = ["dateTo is required."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
         }
 
         if (dateFrom > dateTo)
         {
-            throw new BadRequestException("dateFrom cannot be later than dateTo");
+            throw new ValidationException("dateFrom", "dateFrom cannot be later than dateTo.");
         }
 
-        var from = dateFrom.Value.ToDateTime(TimeOnly.MinValue);
-        var toExclusive = dateTo.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var from = dateFrom!.Value.ToDateTime(TimeOnly.MinValue);
+        var toExclusive = dateTo!.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
 
         var groups = await context.Expenses
             .AsNoTracking()
@@ -191,7 +202,7 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         };
     }
 
-    public async Task<BaseResponse<bool>> Delete(int userId, int id)
+    public async Task Delete(int userId, int id)
     {
         var expense = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (expense is null)
@@ -200,31 +211,32 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         }
 
         context.Expenses.Remove(expense);
-        var result = await context.SaveChangesAsync();
-
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status200OK,
-            Message = "Expense deleted successfully",
-            Details = result > 0
-        };
+        await context.SaveChangesAsync();
     }
 
+    // Collects every invalid field so the client gets all errors in one response
     private static void ValidateFields(ExpenseRequest request)
     {
+        var errors = new Dictionary<string, string[]>();
+
         if (request.Amount <= 0)
         {
-            throw new BadRequestException("Expense amount must be greater than zero");
+            errors["amount"] = ["Amount must be greater than zero."];
         }
 
         if (request.Currency.Length != 3 || request.Currency.Any(c => !char.IsAsciiLetterUpper(c)))
         {
-            throw new BadRequestException("Currency must contain exactly three uppercase letters (e.g. AMD, USD, EUR)");
+            errors["currency"] = ["Currency must contain exactly three uppercase letters (e.g. AMD, USD, EUR)."];
         }
 
         if (request.ExpenseDate.Date > DateTime.UtcNow.Date.AddDays(1))
         {
-            throw new BadRequestException("The selected date cannot be more than one day from current day");
+            errors["expenseDate"] = ["The selected date cannot be more than one day from current day."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
         }
     }
     
@@ -236,12 +248,12 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         if (category is null)
         {
-            throw new BadRequestException("The selected category does not exist");
+            throw new ValidationException("categoryId", "The selected category does not exist.");
         }
 
         if (!category.IsActive && category.Id != currentCategoryId)
         {
-            throw new BadRequestException("The selected category is inactive");
+            throw new ValidationException("categoryId", "The selected category is inactive.");
         }
     }
 }
