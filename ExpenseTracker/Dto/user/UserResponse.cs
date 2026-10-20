@@ -1,4 +1,6 @@
-﻿namespace ExpenseTracker.Dto.user;
+﻿using ExpenseTracker.Entity;
+
+namespace ExpenseTracker.Dto.user;
 
 public record UserResponse(
     int Id,

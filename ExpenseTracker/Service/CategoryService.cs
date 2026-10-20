@@ -11,7 +11,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 {
     public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories(bool includeInactive)
     {
-        var categories = await context.Categories.Where(c => includeInactive || c.IsActive).ToListAsync();
+        var categories = await context.Categories.AsNoTracking().Where(c => includeInactive || c.IsActive).ToListAsync();
 
         return new BaseResponse<ICollection<CategoryResponse>>
         {
@@ -23,7 +23,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
     public async Task<BaseResponse<CategoryResponse>> GetById(int id)
     {
-        var category = await context.Categories.FindAsync(id);
+        var category = await context.Categories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
         if (category is null)
         {
             throw new NotFoundException($"Category with id {id} not found");

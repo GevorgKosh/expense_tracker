@@ -6,6 +6,6 @@ public class ExpenseFilter
     public DateTime? DateFrom { get; set; }
     public DateTime? DateTo { get; set; }
     public string? Currency { get; set; }
-    public Double? MinimumAmount { get; set; }
-    public Double? MaximumAmount { get; set; }
+    public decimal? MinimumAmount { get; set; }
+    public decimal? MaximumAmount { get; set; }
 }

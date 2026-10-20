@@ -45,8 +45,9 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
             builder.ToTable("Expense");
             builder.HasKey(e => e.Id);
             builder.Property(e => e.Name).HasMaxLength(128);
+            builder.Property(e => e.Amount).HasPrecision(18, 2);
             builder.Property(e => e.Description).HasMaxLength(128);
-            builder.Property(e => e.Currency).HasMaxLength(128);
+            builder.Property(e => e.Currency).HasMaxLength(3);
             builder.HasOne(e => e.Category)
                 .WithMany(c => c.Expenses)
                 .HasForeignKey(e => e.CategoryId)
