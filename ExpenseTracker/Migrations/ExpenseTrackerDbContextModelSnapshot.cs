@@ -22,7 +22,7 @@ namespace ExpenseTracker.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("ExpenseTracker.Dto.Category", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.Category", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -48,6 +48,9 @@ namespace ExpenseTracker.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Category", (string)null);
 
@@ -86,7 +89,7 @@ namespace ExpenseTracker.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ExpenseTracker.Dto.Expense", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.Expense", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -94,8 +97,9 @@ namespace ExpenseTracker.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<double>("Amount")
-                        .HasColumnType("float");
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
@@ -105,8 +109,8 @@ namespace ExpenseTracker.Migrations
 
                     b.Property<string>("Currency")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -128,12 +132,14 @@ namespace ExpenseTracker.Migrations
 
                     b.HasIndex("CategoryId");
 
+                    b.HasIndex("ExpenseDate");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("Expense", (string)null);
                 });
 
-            modelBuilder.Entity("ExpenseTracker.Dto.User", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -172,15 +178,15 @@ namespace ExpenseTracker.Migrations
                     b.ToTable("User", (string)null);
                 });
 
-            modelBuilder.Entity("ExpenseTracker.Dto.Expense", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.Expense", b =>
                 {
-                    b.HasOne("ExpenseTracker.Dto.Category", "Category")
+                    b.HasOne("ExpenseTracker.Entity.Category", "Category")
                         .WithMany("Expenses")
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("ExpenseTracker.Dto.User", null)
+                    b.HasOne("ExpenseTracker.Entity.User", null)
                         .WithMany("ExpenseList")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -189,12 +195,12 @@ namespace ExpenseTracker.Migrations
                     b.Navigation("Category");
                 });
 
-            modelBuilder.Entity("ExpenseTracker.Dto.Category", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.Category", b =>
                 {
                     b.Navigation("Expenses");
                 });
 
-            modelBuilder.Entity("ExpenseTracker.Dto.User", b =>
+            modelBuilder.Entity("ExpenseTracker.Entity.User", b =>
                 {
                     b.Navigation("ExpenseList");
                 });

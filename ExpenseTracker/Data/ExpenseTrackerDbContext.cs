@@ -29,6 +29,7 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
             builder.Property(e => e.Name)
                 .HasMaxLength(128)
                 .IsRequired();
+            builder.HasIndex(e => e.Name).IsUnique();
             builder.Property(e => e.Description).HasMaxLength(128);
             builder.Property(e => e.IsActive).HasDefaultValue(true).ValueGeneratedNever();
             builder.HasData(
@@ -41,7 +42,7 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
 
         builder.Entity<Expense>(builder =>
         {
-            builder.ToTable("Expense");
+            builder.ToTable("Expense"); 
             builder.HasKey(e => e.Id);
             builder.Property(e => e.Name).HasMaxLength(128);
             builder.Property(e => e.Amount).HasPrecision(18, 2);
@@ -52,6 +53,8 @@ public class ExpenseTrackerDbContext(DbContextOptions<ExpenseTrackerDbContext> o
                 .HasForeignKey(e => e.CategoryId)
                 .IsRequired()
                 .OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(e => e.ExpenseDate);
+            builder.HasIndex(e => e.CategoryId);
             builder.HasOne<User>()
                 .WithMany(u => u.ExpenseList)
                 .HasForeignKey(e => e.UserId);
