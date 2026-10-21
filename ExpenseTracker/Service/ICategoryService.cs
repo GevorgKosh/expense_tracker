@@ -1,4 +1,3 @@
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
 
 namespace ExpenseTracker.Service;

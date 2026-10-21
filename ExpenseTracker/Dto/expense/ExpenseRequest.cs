@@ -3,7 +3,7 @@ namespace ExpenseTracker.Dto.expense;
 public class ExpenseRequest
 {
     public string? Name { get; set; }
-    public string Description { get; set; }
+    public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public string Currency { get; set; } = string.Empty;
     public DateTime ExpenseDate { get; set; }

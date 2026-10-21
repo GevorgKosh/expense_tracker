@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authorization;

@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.expense;
+using ExpenseTracker.Entity;
 using ExpenseTracker.Exceptions;
 using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;
@@ -27,7 +27,7 @@ public class ExpenseServiceTests
         {
             Name = "test_name",
             Description = "test_description",
-            Amount = 1000.0,
+            Amount = 1000,
             Currency = "USD",
             CategoryId = categoryId
         };
@@ -42,7 +42,7 @@ public class ExpenseServiceTests
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(-100.50)]
-    public async Task Create_WithZeroOrNegativeAmount_IsRejected(double amount)
+    public async Task Create_WithZeroOrNegativeAmount_IsRejected(decimal amount)
     {
         await using var context = CreateContext();
         var service = new ExpenseService(context, CreateMapper());
@@ -436,7 +436,7 @@ public class ExpenseServiceTests
             Id = id,
             Name = $"expense_{id}",
             Description = "test_description",
-            Amount = 100.0,
+            Amount = 100,
             Currency = "USD",
             CategoryId = 1,
             UserId = 1,

@@ -1,4 +1,3 @@
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authorization;
