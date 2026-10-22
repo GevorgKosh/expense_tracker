@@ -2,7 +2,7 @@
 
 namespace ExpenseTracker.Dto.expense;
 
-public class ExpenseSummary
+public record ExpenseSummary
 {
     public DateOnly DateFrom { get; set; }
     public DateOnly DateTo { get; set; }

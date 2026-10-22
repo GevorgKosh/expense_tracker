@@ -1,11 +1,13 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace ExpenseTracker.Dto.expense;
 
-public class ExpenseRequest
+public record ExpenseRequest
 {
-    public string? Name { get; set; }
-    public string Description { get; set; } = string.Empty;
-    public decimal Amount { get; set; }
-    public string Currency { get; set; } = string.Empty;
-    public DateTime ExpenseDate { get; set; }
-    public int CategoryId { get; set; }
+    [Required] public string? Name { get; set; } 
+    [Required] public string Description { get; set; } = string.Empty;
+    [Required] public decimal Amount { get; set; }
+    [Required] public string Currency { get; set; } = string.Empty;
+    [Required] public DateTime ExpenseDate { get; set; }
+    [Required] public int CategoryId { get; set; }
 }
