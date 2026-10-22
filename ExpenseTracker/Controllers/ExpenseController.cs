@@ -12,6 +12,9 @@ namespace ExpenseTracker.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/expenses")]
+[Produces("application/json")]
+// Every action requires a token, so every action can return 401
+[ProducesResponseType(typeof(BaseResponse<object>), StatusCodes.Status401Unauthorized)]
 public class ExpenseController(IExpenseService service): ControllerBase
 {
     /// <summary>
@@ -24,7 +27,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// Example: `GET /api/expenses?dateFrom=2026-10-01&amp;dateTo=2026-10-31&amp;categoryId=1&amp;currency=USD`
     /// </remarks>
     /// <param name="filter">Category, date range, currency and amount range to filter by.</param>
+    /// <response code="200">The matching expenses (an empty list if none match).</response>
+    /// <response code="400">A filter value has the wrong format (e.g. an invalid date).</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
     [HttpGet]
+    [ProducesResponseType(typeof(BaseResponse<ICollection<ExpenseResponse>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BaseResponse<IDictionary<string, string[]>>), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetExpenseList([FromQuery] ExpenseFilter filter)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -42,7 +50,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// </remarks>
     /// <param name="dateFrom">First day of the range, e.g. `2026-10-01`.</param>
     /// <param name="dateTo">Last day of the range, e.g. `2026-10-31`.</param>
+    /// <response code="200">The summary (zero totals if there are no expenses in the range).</response>
+    /// <response code="400">A date is missing, `dateFrom` is after `dateTo`, or the expenses use more than one currency.</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
     [HttpGet("summary")]
+    [ProducesResponseType(typeof(BaseResponse<ExpenseSummary>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BaseResponse<IDictionary<string, string[]>>), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<BaseResponse<ExpenseSummary>>> GetSummary([FromQuery] DateOnly? dateFrom, [FromQuery] DateOnly? dateTo)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -60,7 +73,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// All invalid fields are returned together.
     /// </remarks>
     /// <param name="request">Expense details.</param>
+    /// <response code="201">The expense was created.</response>
+    /// <response code="400">One or more fields are invalid, or the category doesn't exist or is inactive.</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
     [HttpPost]
+    [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BaseResponse<IDictionary<string, string[]>>), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<BaseResponse<bool>>> CreateExpense(ExpenseRequest request)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -76,7 +94,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// Returns not found if the expense belongs to another user.
     /// </remarks>
     /// <param name="id">Expense id.</param>
+    /// <response code="200">The expense.</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
+    /// <response code="404">The expense doesn't exist or belongs to another user.</response>
     [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(BaseResponse<ExpenseResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BaseResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<BaseResponse<ExpenseResponse>>> GetExpenseById(int id)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -92,7 +115,12 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// Returns not found if the expense belongs to another user.
     /// </remarks>
     /// <param name="id">Expense id.</param>
+    /// <response code="204">The expense was deleted.</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
+    /// <response code="404">The expense doesn't exist or belongs to another user.</response>
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(BaseResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteExpense(int id)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -110,7 +138,14 @@ public class ExpenseController(IExpenseService service): ControllerBase
     /// </remarks>
     /// <param name="id">Expense id.</param>
     /// <param name="request">New expense details.</param>
+    /// <response code="200">The expense was updated.</response>
+    /// <response code="400">One or more fields are invalid, or the new category doesn't exist or is inactive.</response>
+    /// <response code="401">The access token is missing, invalid or expired.</response>
+    /// <response code="404">The expense doesn't exist or belongs to another user.</response>
     [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(BaseResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BaseResponse<IDictionary<string, string[]>>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(BaseResponse<object>), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<BaseResponse<bool>>> UpdateExpense(int id, ExpenseRequest request)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
