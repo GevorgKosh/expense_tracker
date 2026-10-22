@@ -76,6 +76,25 @@ dotnet run --project ExpenseTracker
 
 Swagger UI is available in `Development` at `/swagger`.
 
+## Running with Docker Compose
+
+Runs the API and SQL Server 2022 in containers; no local SQL Server or .NET SDK needed. Requires Docker.
+
+1. Create `.env` from `.env.example` and set both `AppSettings__Token` and `MSSQL_SA_PASSWORD`.
+2. Start everything:
+
+   ```bash
+   docker compose up --build
+   ```
+
+The API waits until SQL Server is healthy, then applies the migrations on startup.
+
+- Swagger UI: http://localhost:8080/swagger
+- Health check: http://localhost:8080/health
+- SQL Server (e.g. for SSMS): `localhost,14330`, user `sa`, password from `.env`
+
+The database is kept in the `sqlserver-data` volume between runs. `docker compose down -v` removes it.
+
 ## Tests
 
 ```bash
