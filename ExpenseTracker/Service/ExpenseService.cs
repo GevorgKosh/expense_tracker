@@ -1,5 +1,6 @@
 using AutoMapper;
 using ExpenseTracker.Data;
+using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
 using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Entity;
@@ -29,8 +30,10 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper, ILo
         };
     }
 
-    public async Task<BaseResponse<ICollection<ExpenseResponse>>> GetExpenses(int userId, ExpenseFilter filter)
+    public async Task<BaseResponse<PagedResponse<ExpenseResponse>>> GetExpenses(int userId, ExpenseFilter filter)
     {
+        ValidatePagingAndSorting(filter);
+
         IQueryable<Expense> query = context.Expenses
             .AsNoTracking()
             .Include(expense => expense.Category)
@@ -70,13 +73,25 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper, ILo
             query = query.Where(expense => expense.ExpenseDate < dateToExclusive);
         }
 
-        var expenses = await query.OrderByDescending(expense => expense.ExpenseDate).ToListAsync();
+        var totalCount = await query.CountAsync();
 
-        return new BaseResponse<ICollection<ExpenseResponse>>
+        var expenses = await ApplySorting(query, filter)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .ToListAsync();
+
+        return new BaseResponse<PagedResponse<ExpenseResponse>>
         {
             Status = StatusCodes.Status200OK,
             Message = "Expenses retrieved successfully",
-            Details = mapper.Map<ICollection<ExpenseResponse>>(expenses)
+            Details = new PagedResponse<ExpenseResponse>
+            {
+                Items = mapper.Map<ICollection<ExpenseResponse>>(expenses),
+                Page = filter.Page,
+                PageSize = filter.PageSize,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize)
+            }
         };
     }
 
@@ -219,6 +234,57 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper, ILo
         await context.SaveChangesAsync();
 
         logger.LogInformation("User {UserId} deleted expense {ExpenseId}", userId, id);
+    }
+
+    private static void ValidatePagingAndSorting(ExpenseFilter filter)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (filter.Page < 1)
+        {
+            errors["page"] = ["Page must be 1 or greater."];
+        }
+
+        if (filter.PageSize is < 1 or > ExpenseFilter.MaxPageSize)
+        {
+            errors["pageSize"] = [$"Page size must be between 1 and {ExpenseFilter.MaxPageSize}."];
+        }
+
+        if (!SortColumns.Contains(filter.SortBy))
+        {
+            errors["sortBy"] = ["Sort by must be one of: expenseDate, amount, createdAt."];
+        }
+
+        if (!filter.SortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase)
+            && !filter.SortDirection.Equals("desc", StringComparison.OrdinalIgnoreCase))
+        {
+            errors["sortDirection"] = ["Sort direction must be asc or desc."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
+        }
+    }
+
+    private static readonly HashSet<string> SortColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "expenseDate", "amount", "createdAt"
+    };
+
+    private static IQueryable<Expense> ApplySorting(IQueryable<Expense> query, ExpenseFilter filter)
+    {
+        var descending = filter.SortDirection.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedQueryable<Expense> ordered = filter.SortBy.ToLowerInvariant() switch
+        {
+            "amount" => descending ? query.OrderByDescending(e => e.Amount) : query.OrderBy(e => e.Amount),
+            "createdat" => descending ? query.OrderByDescending(e => e.CreatedDateTime) : query.OrderBy(e => e.CreatedDateTime),
+            _ => descending ? query.OrderByDescending(e => e.ExpenseDate) : query.OrderBy(e => e.ExpenseDate)
+        };
+
+        // Id as a tie-breaker keeps the order stable, so items don't move between pages
+        return descending ? ordered.ThenByDescending(e => e.Id) : ordered.ThenBy(e => e.Id);
     }
 
     // Collects every invalid field so the client gets all errors in one response

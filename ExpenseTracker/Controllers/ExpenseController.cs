@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authorization;
@@ -18,22 +19,27 @@ namespace ExpenseTracker.Controllers;
 public class ExpenseController(IExpenseService service): ControllerBase
 {
     /// <summary>
-    /// Returns the user's expenses, newest first, optionally filtered.
+    /// Returns one page of the user's expenses, optionally filtered and sorted.
     /// </summary>
     /// <remarks>
     /// All filters are optional and can be combined. `dateFrom` and `dateTo` are inclusive,
     /// `currency` is case-insensitive and the amount range is inclusive on both ends.
     ///
-    /// Example: `GET /api/expenses?dateFrom=2026-10-01&amp;dateTo=2026-10-31&amp;categoryId=1&amp;currency=USD`
+    /// Results are paged: `page` starts at 1 and `pageSize` is 1 to 100 (default 20). The response contains
+    /// the page's `items` plus `totalCount` and `totalPages` for all matching expenses.
+    ///
+    /// Sorting: `sortBy` is `expenseDate` (default), `amount` or `createdAt`; `sortDirection` is `desc` (default) or `asc`.
+    ///
+    /// Example: `GET /api/expenses?dateFrom=2026-10-01&amp;dateTo=2026-10-31&amp;categoryId=1&amp;sortBy=amount&amp;sortDirection=asc&amp;page=1&amp;pageSize=10`
     /// </remarks>
-    /// <param name="filter">Category, date range, currency and amount range to filter by.</param>
-    /// <response code="200">The matching expenses (an empty list if none match).</response>
-    /// <response code="400">A filter value has the wrong format (e.g. an invalid date).</response>
+    /// <param name="filter">Filters, paging and sorting.</param>
+    /// <response code="200">The requested page (an empty `items` list if nothing matches).</response>
+    /// <response code="400">A filter value has the wrong format, or page, page size, sort field or sort direction is invalid.</response>
     /// <response code="401">The access token is missing, invalid or expired.</response>
     [HttpGet]
-    [ProducesResponseType(typeof(BaseResponse<ICollection<ExpenseResponse>>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BaseResponse<PagedResponse<ExpenseResponse>>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(BaseResponse<IDictionary<string, string[]>>), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<BaseResponse<ICollection<ExpenseResponse>>>> GetExpenseList([FromQuery] ExpenseFilter filter)
+    public async Task<ActionResult<BaseResponse<PagedResponse<ExpenseResponse>>>> GetExpenseList([FromQuery] ExpenseFilter filter)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var response = await service.GetExpenses(userId, filter);
