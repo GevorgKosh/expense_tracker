@@ -16,6 +16,21 @@ ASP.NET Core Web API for tracking personal expenses by category, using EF Core w
   dotnet tool update --global dotnet-ef
   ```
 
+### JWT signing key (.env)
+
+The JWT signing key is a secret and is not stored in the repository. It is read from a `.env` file in the solution root, which is in `.gitignore`:
+
+```bash
+cp .env.example .env
+openssl rand -base64 64   # paste the output into .env, inside the single quotes
+```
+
+```
+AppSettings__Token='<your-generated-key>'
+```
+
+On startup the values in `.env` are loaded as environment variables and override `appsettings.json` (`AppSettings__Token` → `AppSettings:Token`). Environment variables that are already set (e.g. in Docker) take priority over `.env`. The API refuses to start if the key is missing.
+
 ### Connection string
 
 Set `ConnectionStrings:UserDatabase` in `ExpenseTracker/appsettings.json` (or `appsettings.Development.json`) to point at your SQL Server instance:

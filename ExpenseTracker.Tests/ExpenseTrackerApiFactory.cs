@@ -15,6 +15,7 @@ public class ExpenseTrackerApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("AppSettings:Token", Convert.ToBase64String(new byte[64]));
 
         builder.ConfigureServices(services =>
         {

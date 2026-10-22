@@ -17,8 +17,14 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     Log.Information("Starting ExpenseTracker API");
+    DotNetEnv.Env.TraversePath().NoClobber().Load();
 
     var builder = WebApplication.CreateBuilder(args);
+    if (string.IsNullOrWhiteSpace(builder.Configuration["AppSettings:Token"]))
+    {
+        throw new InvalidOperationException(
+            "The JWT signing key is not set. Copy .env.example to .env and fill in AppSettings__Token.");
+    }
 
     builder.Services.AddSerilog((services, configuration) => configuration
         .ReadFrom.Configuration(builder.Configuration)
