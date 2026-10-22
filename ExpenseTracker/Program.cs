@@ -5,6 +5,7 @@ using ExpenseTracker.Mapping;
 using ExpenseTracker.Middleware;
 using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -107,6 +108,8 @@ try
     builder.Services.AddScoped<IExpenseService, ExpenseService>();
     builder.Services.AddExceptionHandler<ExpenseExceptionHandler>();
     builder.Services.AddProblemDetails();
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<ExpenseTrackerDbContext>("database");
 
     var app = builder.Build();
     // Before the exception handler, so the logged status code is the final one (e.g. 404, not 500)
@@ -131,6 +134,10 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = HealthCheckResponseWriter.WriteJson
+    });
     app.Run();
 }
 catch (Exception exception) when (exception is not HostAbortedException)

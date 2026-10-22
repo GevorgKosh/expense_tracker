@@ -291,7 +291,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
-                  "const expenses = pm.response.json().details;",
+                  "const expenses = pm.response.json().details.items;",
                   "pm.test('Returns only the Food expense', () => {",
                   "    pm.expect(expenses).to.have.lengthOf(1);",
                   "    pm.expect(expenses[0].categoryName).to.eql('Food');",
@@ -319,6 +319,44 @@
               ]
             },
             "description": "Combines all filters; only the Food expense matches. Stores its id in `expenseId`."
+          }
+        },
+        {
+          "name": "Get expenses sorted and paged",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().details;",
+                  "pm.test('Returns the second page with the larger amount', () => {",
+                  "    pm.expect(page.items.map(e => e.amount)).to.eql([40]);",
+                  "    pm.expect(page.page).to.eql(2);",
+                  "    pm.expect(page.pageSize).to.eql(1);",
+                  "    pm.expect(page.totalCount).to.eql(2);",
+                  "    pm.expect(page.totalPages).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses?sortBy=amount&sortDirection=asc&page=2&pageSize=1",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ],
+              "query": [
+                { "key": "sortBy", "value": "amount", "description": "expenseDate (default), amount or createdAt" },
+                { "key": "sortDirection", "value": "asc", "description": "desc (default) or asc" },
+                { "key": "page", "value": "2", "description": "Starts at 1" },
+                { "key": "pageSize", "value": "1", "description": "1 to 100, default 20" }
+              ]
+            },
+            "description": "Sorts this run's two expenses by amount (25.50, 40) and returns page 2 with one item per page, so only the 40 expense comes back."
           }
         },
         {

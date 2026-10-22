@@ -88,7 +88,7 @@ public class ExpenseServiceTests
         var response = await service.GetExpenses(1, filter);
 
         Assert.Equal(StatusCodes.Status200OK, response.Status);
-        Assert.Equal(expectedIds, response.Details.Select(e => e.Id).Order());
+        Assert.Equal(expectedIds, response.Details!.Items.Select(e => e.Id).Order());
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class ExpenseServiceTests
         var response = await service.GetExpenses(1, filter);
 
         Assert.Equal(StatusCodes.Status200OK, response.Status);
-        var expense = Assert.Single(response.Details);
+        var expense = Assert.Single(response.Details!.Items);
         Assert.Equal(1, expense.Id);
         Assert.Equal("Food", expense.CategoryName);
     }
@@ -145,7 +145,7 @@ public class ExpenseServiceTests
 
         var response = await service.GetExpenses(1, new ExpenseFilter());
 
-        Assert.Equal(1, Assert.Single(response.Details).Id);
+        Assert.Equal(1, Assert.Single(response.Details!.Items).Id);
     }
 
     [Fact]
@@ -159,7 +159,78 @@ public class ExpenseServiceTests
 
         var response = await service.GetExpenses(1, new ExpenseFilter { DateTo = new DateTime(2026, 7, 31) });
 
-        Assert.Single(response.Details);
+        Assert.Single(response.Details!.Items);
+    }
+
+    [Theory]
+    [InlineData(1, new[] { 5, 4 })]
+    [InlineData(2, new[] { 3, 2 })]
+    [InlineData(3, new[] { 1 })]
+    [InlineData(4, new int[0])]
+    public async Task GetExpenses_WithPaging_ReturnsRequestedPageAndTotals(int page, int[] expectedIds)
+    {
+        await using var context = CreateContext();
+        for (var id = 1; id <= 5; id++)
+        {
+            context.Expenses.Add(CreateExpense(id, new DateTime(2026, 7, id)));
+        }
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
+
+        var response = await service.GetExpenses(1, new ExpenseFilter { Page = page, PageSize = 2 });
+
+        var result = response.Details!;
+        Assert.Equal(expectedIds, result.Items.Select(e => e.Id));
+        Assert.Equal(page, result.Page);
+        Assert.Equal(2, result.PageSize);
+        Assert.Equal(5, result.TotalCount);
+        Assert.Equal(3, result.TotalPages);
+    }
+
+    [Theory]
+    [InlineData("expenseDate", "desc", new[] { 3, 2, 1 })]
+    [InlineData("expenseDate", "asc", new[] { 1, 2, 3 })]
+    [InlineData("amount", "asc", new[] { 2, 3, 1 })]
+    [InlineData("AMOUNT", "DESC", new[] { 1, 3, 2 })]
+    [InlineData("createdAt", "asc", new[] { 3, 1, 2 })]
+    public async Task GetExpenses_WithSorting_ReturnsExpensesInRequestedOrder(string sortBy, string sortDirection, int[] expectedIds)
+    {
+        await using var context = CreateContext();
+        var first = CreateExpense(1, new DateTime(2026, 7, 1));
+        first.Amount = 300;
+        first.CreatedDateTime = new DateTime(2026, 7, 2);
+        var second = CreateExpense(2, new DateTime(2026, 7, 2));
+        second.Amount = 100;
+        second.CreatedDateTime = new DateTime(2026, 7, 3);
+        var third = CreateExpense(3, new DateTime(2026, 7, 3));
+        third.Amount = 200;
+        third.CreatedDateTime = new DateTime(2026, 7, 1);
+        context.Expenses.AddRange(first, second, third);
+        await context.SaveChangesAsync();
+
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
+
+        var response = await service.GetExpenses(1, new ExpenseFilter { SortBy = sortBy, SortDirection = sortDirection });
+
+        Assert.Equal(expectedIds, response.Details!.Items.Select(e => e.Id));
+    }
+
+    [Theory]
+    [InlineData(0, 20, "expenseDate", "desc", "page")]
+    [InlineData(1, 0, "expenseDate", "desc", "pageSize")]
+    [InlineData(1, 101, "expenseDate", "desc", "pageSize")]
+    [InlineData(1, 20, "name", "desc", "sortBy")]
+    [InlineData(1, 20, "expenseDate", "down", "sortDirection")]
+    public async Task GetExpenses_WithInvalidPagingOrSorting_IsRejected(int page, int pageSize, string sortBy, string sortDirection, string invalidField)
+    {
+        await using var context = CreateContext();
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
+        var filter = new ExpenseFilter { Page = page, PageSize = pageSize, SortBy = sortBy, SortDirection = sortDirection };
+
+        var exception = await Assert.ThrowsAsync<ValidationException>(() => service.GetExpenses(1, filter));
+
+        Assert.Equal([invalidField], exception.Errors.Keys);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.expense;
 using ExpenseTracker.Dto.user;
 using ExpenseTracker.Exceptions;
@@ -29,12 +30,44 @@ public class ExpenseApiTests : IClassFixture<ExpenseTrackerApiFactory>
         var getResponse = await client.GetAsync("/api/expenses");
 
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var body = await getResponse.Content.ReadFromJsonAsync<BaseResponse<List<ExpenseResponse>>>();
-        var expense = Assert.Single(body!.Details!);
+        var body = await getResponse.Content.ReadFromJsonAsync<BaseResponse<PagedResponse<ExpenseResponse>>>();
+        var expense = Assert.Single(body!.Details!.Items);
         Assert.Equal(2500, expense.Amount);
         Assert.Equal("USD", expense.Currency);
         Assert.Equal("Food", expense.CategoryName);
         Assert.Equal(new DateOnly(2026, 7, 10), expense.ExpenseDate);
+        Assert.Equal(1, body.Details.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithPagingAndSortingInQuery_ReturnsRequestedPage()
+    {
+        var client = await CreateAuthenticatedClient();
+        foreach (var amount in new[] { 30m, 10m, 20m })
+        {
+            await client.PostAsJsonAsync("/api/expenses", CreateRequest(amount));
+        }
+
+        var response = await client.GetAsync("/api/expenses?sortBy=amount&sortDirection=asc&page=2&pageSize=2");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = (await response.Content.ReadFromJsonAsync<BaseResponse<PagedResponse<ExpenseResponse>>>())!.Details!;
+        Assert.Equal(30, Assert.Single(page.Items).Amount);
+        Assert.Equal(2, page.Page);
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal(2, page.TotalPages);
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithInvalidPageSize_ReturnsValidationError()
+    {
+        var client = await CreateAuthenticatedClient();
+
+        var response = await client.GetAsync("/api/expenses?pageSize=500");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<BaseResponse<Dictionary<string, string[]>>>();
+        Assert.Equal(["Page size must be between 1 and 100."], body!.Details!["pageSize"]);
     }
 
     [Theory]
