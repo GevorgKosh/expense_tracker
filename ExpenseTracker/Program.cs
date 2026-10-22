@@ -30,8 +30,10 @@ try
             options.InvalidModelStateResponseFactory = ValidationErrorResponse.Create);
     builder.Services.AddOpenApi();
     builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>());
+    builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {
+        options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml"));
         options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Name = "Authorization",
