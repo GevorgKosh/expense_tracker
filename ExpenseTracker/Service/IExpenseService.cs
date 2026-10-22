@@ -1,13 +1,14 @@
 using ExpenseTracker.Dto;
+using ExpenseTracker.Dto.expense;
 
 namespace ExpenseTracker.Service;
 
 public interface IExpenseService
 {
-    Task<BaseResponse<ICollection<ExpenseResponse>>> GetExpenses();
-    Task<BaseResponse<ExpenseResponse>> GetById(int id);
-    Task<BaseResponse<ICollection<ExpenseResponse>>> GetFiltered(ExpenseFilter filter);
-    Task<BaseResponse<bool>> Create(ExpenseRequest request);
-    Task<BaseResponse<bool>> Update(int id, ExpenseRequest request);
-    Task<BaseResponse<bool>> Delete(int id);
+    Task<BaseResponse<PagedResponse<ExpenseResponse>>> GetExpenses(int userId, ExpenseFilter filter);
+    Task<BaseResponse<ExpenseResponse>> GetById(int userId, int id);
+    Task<BaseResponse<ExpenseSummary>> GetSummary(int userId, DateOnly? dateFrom, DateOnly? dateTo);
+    Task<BaseResponse<bool>> Create(int userId, ExpenseRequest request);
+    Task<BaseResponse<bool>> Update(int userId, int id, ExpenseRequest request);
+    Task Delete(int userId, int id);
 }

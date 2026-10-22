@@ -3,27 +3,23 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.user;
+using ExpenseTracker.Entity;
+using ExpenseTracker.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ExpenseTracker.Service;
 
-public class AuthService(ExpenseTrackerDbContext context, IConfiguration configuration): IAuthService
+public class AuthService(ExpenseTrackerDbContext context, IConfiguration configuration, ILogger<AuthService> logger): IAuthService
 {
     public async Task<BaseResponse<UserResponse>> Register(UserRegisterRequest request)
     {
         var isExist = await context.User.AnyAsync(u => u.Name == request.UserName);
         if (isExist)
         {
-            return new BaseResponse<UserResponse>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Error = "Conflict",
-                Message = "User with such name already exists"
-            };
+            throw new ConflictException("User with such name already exists");
         }
 
         var user = new User();
@@ -35,7 +31,9 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         
         context.User.Add(user);
         await context.SaveChangesAsync();
-        
+
+        logger.LogInformation("User {UserId} '{UserName}' registered", user.Id, user.Name);
+
         return new BaseResponse<UserResponse>
         {
             Status = StatusCodes.Status201Created,
@@ -50,15 +48,13 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         var user = await context.User.FirstOrDefaultAsync(u => u.Name == request.UserName);
         if (user is null || hasher.VerifyHashedPassword(user, user.PasswordHash, request.PasswordHash) == PasswordVerificationResult.Failed)
         {
-            return new BaseResponse<LoginResponse>
-            {
-                Status = StatusCodes.Status401Unauthorized,
-                Error = "Unauthorized",
-                Message = "Incorrect username or password"
-            };
+            logger.LogWarning("Failed login attempt for user '{UserName}'", request.UserName);
+            throw new UnauthorizedException("Incorrect username or password");
         }
 
         var token = await CreateTokenModel(user);
+
+        logger.LogInformation("User {UserId} '{UserName}' logged in", user.Id, user.Name);
 
         return new BaseResponse<LoginResponse>
         {
@@ -72,7 +68,6 @@ public class AuthService(ExpenseTrackerDbContext context, IConfiguration configu
         };
     }
 
-    // Issues a new access/refresh token pair and stores the refresh token on the user.
     private async Task<TokenModel> CreateTokenModel(User user)
     {
         var now = DateTime.UtcNow;

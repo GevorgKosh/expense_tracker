@@ -1,16 +1,17 @@
 using AutoMapper;
 using ExpenseTracker.Data;
-using ExpenseTracker.Dto;
 using ExpenseTracker.Dto.category;
+using ExpenseTracker.Entity;
+using ExpenseTracker.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
 
-public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): ICategoryService
+public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper, ILogger<CategoryService> logger): ICategoryService
 {
-    public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories()
+    public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories(bool includeInactive)
     {
-        var categories = await context.Categories.ToListAsync();
+        var categories = await context.Categories.AsNoTracking().Where(c => includeInactive || c.IsActive).ToListAsync();
 
         return new BaseResponse<ICollection<CategoryResponse>>
         {
@@ -22,10 +23,10 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
     public async Task<BaseResponse<CategoryResponse>> GetById(int id)
     {
-        var category = await context.Categories.FindAsync(id);
+        var category = await context.Categories.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
         if (category is null)
         {
-            return NotFound<CategoryResponse>(id);
+            throw new NotFoundException($"Category with id {id} not found");
         }
 
         return new BaseResponse<CategoryResponse>
@@ -38,9 +39,24 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
     public async Task<BaseResponse<bool>> Create(CategoryRequest request)
     {
+        var isNameAlreadyExist = await context.Categories.AnyAsync(c => c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
+        if (isNameAlreadyExist)
+        {
+            throw new ConflictException("Category already exist");
+        }
+
+        var isTypeAlreadyExist = await context.Categories.AnyAsync(c => c.Type ==  request.Type);
+        if (isTypeAlreadyExist)
+        {
+            throw new ConflictException("Category type already exist");
+        }
+        
         var category = mapper.Map<Category>(request);
+        
         context.Categories.Add(category);
         var result = await context.SaveChangesAsync();
+
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' created", category.Id, category.Name);
 
         return new BaseResponse<bool>
         {
@@ -55,11 +71,18 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Category with id {id} not found");
         }
 
+        var restrictUpdating = await context.Categories.AnyAsync(c => c.Id != id && c.Name.Trim().ToLower() == request.Name.Trim().ToLower());
+        if (restrictUpdating)
+        {
+            throw new ConflictException("Category with such name is already exist");
+        }
         mapper.Map(request, category);
         await context.SaveChangesAsync();
+
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' updated", category.Id, category.Name);
 
         return new BaseResponse<bool>
         {
@@ -69,44 +92,24 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         };
     }
 
-    public async Task<BaseResponse<bool>> Delete(int id)
+    public async Task Delete(int id)
     {
         var category = await context.Categories.FindAsync(id);
         if (category is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Category with id {id} not found");
         }
 
         if (!category.IsActive)
         {
-            return new BaseResponse<bool>
-            {
-                Status = StatusCodes.Status409Conflict,
-                Message = "Category is already inactive",
-                Details = false
-            };
+            throw new ConflictException("Category is already inactive");
         }
 
         category.IsActive = false;
 
         context.Categories.Update(category);
-        var result = await context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status200OK,
-            Message = "Category deleted successfully",
-            Details = true
-        };
-    }
-
-    private static BaseResponse<T> NotFound<T>(int id)
-    {
-        return new BaseResponse<T>
-        {
-            Status = StatusCodes.Status404NotFound,
-            Error = "Not Found",
-            Message = $"Category with id {id} not found"
-        };
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' deactivated", category.Id, category.Name);
     }
 }

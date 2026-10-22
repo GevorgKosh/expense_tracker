@@ -1,0 +1,683 @@
+{
+  "info": {
+    "name": "Personal Expense Tracker API",
+    "description": "Test requests for the Personal Expense Tracker API.\n\nStart the API (`dotnet run --project ExpenseTracker`, listens on http://localhost:5047), then run the whole collection with the Collection Runner, or the requests one by one from top to bottom.\n\n- **Register** creates a new user with a unique name on every run, so the expense and summary results are always the same.\n- **Login** stores the access token in the `token` collection variable; every other request sends it as a Bearer token.\n- Ids created along the way (`categoryId`, `expenseId`) are stored in collection variables too.\n- Category types can exist only once, so on a database where the Entertainment category already exists, **Create category** returns 409 instead of 201 and the rest of the collection reuses the existing category. Both outcomes pass.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5047", "type": "string" },
+    { "key": "userName", "value": "", "type": "string" },
+    { "key": "password", "value": "demo_password", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "categoryId", "value": "", "type": "string" },
+    { "key": "expenseId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// New user on every run, so the expense list and summary only contain this run's expenses",
+                  "pm.collectionVariables.set('userName', 'demo_user_' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Returns the new user', () => {",
+                  "    pm.expect(pm.response.json().details.userName).to.eql(pm.collectionVariables.get('userName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"{{userName}}\",\n  \"password\": \"{{password}}\",\n  \"email\": \"{{userName}}@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "auth", "register" ]
+            },
+            "description": "Registers a new user with a unique name."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const token = pm.response.json().details.token.accessToken;",
+                  "pm.test('Returns an access token', () => pm.expect(token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('token', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userName\": \"{{userName}}\",\n  \"passwordHash\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "auth", "login" ]
+            },
+            "description": "Logs in and stores the access token in the `token` collection variable."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 409 means Entertainment already exists from an earlier run; the next request picks up its id either way",
+                  "pm.test('Status is 201 Created (or 409 if it already exists)', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": 4,\n  \"name\": \"Entertainment\",\n  \"description\": \"Cinema, concerts and games\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "categories" ]
+            },
+            "description": "Creates the Entertainment category (type 4), the only type that isn't seeded.\n\nTypes: 0 Food, 1 Transportation, 2 Shopping, 3 Utilities, 4 Entertainment."
+          }
+        },
+        {
+          "name": "Get categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const entertainment = pm.response.json().details.find(c => c.name === 'Entertainment');",
+                  "pm.test('Contains the Entertainment category', () => pm.expect(entertainment).to.exist);",
+                  "pm.collectionVariables.set('categoryId', entertainment.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "categories" ]
+            },
+            "description": "Lists all categories and stores the Entertainment category id in `categoryId`."
+          }
+        },
+        {
+          "name": "Update category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": 4,\n  \"name\": \"Entertainment\",\n  \"description\": \"Cinema, concerts, games and streaming\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{categoryId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "categories", "{{categoryId}}" ]
+            },
+            "description": "Updates the description of the Entertainment category."
+          }
+        },
+        {
+          "name": "Duplicate category name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('Error code is Conflict', () => pm.expect(pm.response.json().error).to.eql('Conflict'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": 4,\n  \"name\": \"  food \",\n  \"description\": \"Same name as the seeded Food category\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/categories",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "categories" ]
+            },
+            "description": "Name comparison ignores case and surrounding spaces, so \"  food \" clashes with the seeded \"Food\" category."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "Create expense",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lunch\",\n  \"description\": \"Business lunch\",\n  \"amount\": 25.50,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-01\",\n  \"categoryId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            },
+            "description": "Creates a Food expense of 25.50 USD."
+          }
+        },
+        {
+          "name": "Create second expense",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Taxi\",\n  \"description\": \"Airport transfer\",\n  \"amount\": 40,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-10\",\n  \"categoryId\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            },
+            "description": "Creates a Transportation expense of 40 USD, so the summary has two categories."
+          }
+        },
+        {
+          "name": "Get expenses with filters",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const expenses = pm.response.json().details.items;",
+                  "pm.test('Returns only the Food expense', () => {",
+                  "    pm.expect(expenses).to.have.lengthOf(1);",
+                  "    pm.expect(expenses[0].categoryName).to.eql('Food');",
+                  "    pm.expect(expenses[0].amount).to.eql(25.5);",
+                  "});",
+                  "pm.collectionVariables.set('expenseId', expenses[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses?dateFrom=2026-10-01&dateTo=2026-10-31&categoryId=1&currency=usd&minimumAmount=10&maximumAmount=100",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ],
+              "query": [
+                { "key": "dateFrom", "value": "2026-10-01", "description": "On or after this date" },
+                { "key": "dateTo", "value": "2026-10-31", "description": "On or before this date (whole day included)" },
+                { "key": "categoryId", "value": "1", "description": "Food" },
+                { "key": "currency", "value": "usd", "description": "Case-insensitive" },
+                { "key": "minimumAmount", "value": "10" },
+                { "key": "maximumAmount", "value": "100" }
+              ]
+            },
+            "description": "Combines all filters; only the Food expense matches. Stores its id in `expenseId`."
+          }
+        },
+        {
+          "name": "Get expenses sorted and paged",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().details;",
+                  "pm.test('Returns the second page with the larger amount', () => {",
+                  "    pm.expect(page.items.map(e => e.amount)).to.eql([40]);",
+                  "    pm.expect(page.page).to.eql(2);",
+                  "    pm.expect(page.pageSize).to.eql(1);",
+                  "    pm.expect(page.totalCount).to.eql(2);",
+                  "    pm.expect(page.totalPages).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses?sortBy=amount&sortDirection=asc&page=2&pageSize=1",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ],
+              "query": [
+                { "key": "sortBy", "value": "amount", "description": "expenseDate (default), amount or createdAt" },
+                { "key": "sortDirection", "value": "asc", "description": "desc (default) or asc" },
+                { "key": "page", "value": "2", "description": "Starts at 1" },
+                { "key": "pageSize", "value": "1", "description": "1 to 100, default 20" }
+              ]
+            },
+            "description": "Sorts this run's two expenses by amount (25.50, 40) and returns page 2 with one item per page, so only the 40 expense comes back."
+          }
+        },
+        {
+          "name": "Get expense summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "const summary = pm.response.json().details;",
+                  "pm.test('Totals are correct', () => {",
+                  "    pm.expect(summary.expenseCount).to.eql(2);",
+                  "    pm.expect(summary.totalAmount).to.eql(65.5);",
+                  "    pm.expect(summary.currency).to.eql('USD');",
+                  "});",
+                  "pm.test('Totals per category are correct', () => {",
+                  "    pm.expect(summary.categories.map(c => [c.categoryName, c.totalAmount]))",
+                  "        .to.eql([['Food', 25.5], ['Transportation', 40]]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/summary?dateFrom=2026-10-01&dateTo=2026-10-31",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "summary" ],
+              "query": [
+                { "key": "dateFrom", "value": "2026-10-01" },
+                { "key": "dateTo", "value": "2026-10-31" }
+              ]
+            },
+            "description": "Total and per-category totals for October 2026: 25.50 Food + 40 Transportation = 65.50 USD."
+          }
+        },
+        {
+          "name": "Get expense by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the requested expense', () => {",
+                  "    pm.expect(pm.response.json().details.id).to.eql(Number(pm.collectionVariables.get('expenseId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/{{expenseId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "{{expenseId}}" ]
+            }
+          }
+        },
+        {
+          "name": "Update expense",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lunch\",\n  \"description\": \"Business lunch with a client\",\n  \"amount\": 25.50,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-01\",\n  \"categoryId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/{{expenseId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "{{expenseId}}" ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation and errors",
+      "item": [
+        {
+          "name": "Invalid amount",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports the amount field', () => {",
+                  "    pm.expect(pm.response.json().details.amount).to.eql(['Amount must be greater than zero.']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Invalid\",\n  \"description\": \"Zero amount\",\n  \"amount\": 0,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-01\",\n  \"categoryId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            },
+            "description": "The amount must be greater than zero."
+          }
+        },
+        {
+          "name": "Invalid category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports the categoryId field', () => {",
+                  "    pm.expect(pm.response.json().details.categoryId).to.eql(['The selected category does not exist.']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Invalid\",\n  \"description\": \"Unknown category\",\n  \"amount\": 10,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-01\",\n  \"categoryId\": 9999\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            },
+            "description": "Category 9999 doesn't exist."
+          }
+        },
+        {
+          "name": "Deactivate category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// 409 means it was already deactivated by an earlier run",
+                  "pm.test('Status is 204 No Content (or 409 if already inactive)', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/categories/{{categoryId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "categories", "{{categoryId}}" ]
+            },
+            "description": "Soft-deletes the Entertainment category so the next request can test an inactive category."
+          }
+        },
+        {
+          "name": "Expense with inactive category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports the categoryId field', () => {",
+                  "    pm.expect(pm.response.json().details.categoryId).to.eql(['The selected category is inactive.']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Concert\",\n  \"description\": \"Inactive category\",\n  \"amount\": 60,\n  \"currency\": \"USD\",\n  \"expenseDate\": \"2026-10-05\",\n  \"categoryId\": {{categoryId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            },
+            "description": "Expenses can't be added to a deactivated category."
+          }
+        },
+        {
+          "name": "Summary without dateTo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports the dateTo field', () => pm.expect(pm.response.json().details).to.have.property('dateTo'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/summary?dateFrom=2026-10-01",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "summary" ],
+              "query": [ { "key": "dateFrom", "value": "2026-10-01" } ]
+            }
+          }
+        },
+        {
+          "name": "Expense not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/999999",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "999999" ]
+            }
+          }
+        },
+        {
+          "name": "Without token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses" ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete expense",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/expenses/{{expenseId}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "expenses", "{{expenseId}}" ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

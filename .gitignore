@@ -3,3 +3,8 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+# Serilog file sink output
+logs/
+
+# Local secrets (JWT key); see .env.example
+.env

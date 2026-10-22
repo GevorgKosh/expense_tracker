@@ -1,8 +1,11 @@
-﻿namespace ExpenseTracker.Dto.category;
+﻿using System.ComponentModel.DataAnnotations;
+using ExpenseTracker.Entity;
 
-public class CategoryRequest
+namespace ExpenseTracker.Dto.category;
+
+public record CategoryRequest
 {
-    public CategoryType Type { get; set; }
-    public string Name { get; set; }
-    public string Description { get; set; }
+    [Required] public CategoryType Type { get; set; }
+    [Required] public string Name { get; set; } = string.Empty;
+    [Required] public string Description { get; set; } = string.Empty;
 }

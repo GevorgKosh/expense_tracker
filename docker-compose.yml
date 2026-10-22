@@ -1,0 +1,40 @@
+# Runs the API and SQL Server together:  docker compose up --build
+# Secrets (MSSQL_SA_PASSWORD, AppSettings__Token) come from .env - see .env.example.
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    ports:
+      # 14330 on the host, so it doesn't clash with a local SQL Server on 1433
+      - "14330:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: ExpenseTracker/Dockerfile
+    depends_on:
+      sqlserver:
+        # Wait until SQL Server accepts connections, so the migrations on startup don't fail
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Development: applies EF Core migrations on startup and enables Swagger UI
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__UserDatabase: "Server=sqlserver,1433;Database=UserDb;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=true;"
+    ports:
+      - "8080:8080"
+
+volumes:
+  sqlserver-data:

@@ -1,30 +1,25 @@
 using AutoMapper;
 using ExpenseTracker.Data;
 using ExpenseTracker.Dto;
+using ExpenseTracker.Dto.category;
+using ExpenseTracker.Dto.expense;
+using ExpenseTracker.Entity;
+using ExpenseTracker.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
 
-public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IExpenseService
+public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper, ILogger<ExpenseService> logger): IExpenseService
 {
-    public async Task<BaseResponse<ICollection<ExpenseResponse>>> GetExpenses()
+    public async Task<BaseResponse<ExpenseResponse>> GetById(int userId, int id)
     {
-        var expenses = await context.Expenses.ToListAsync();
-
-        return new BaseResponse<ICollection<ExpenseResponse>>
-        {
-            Status = StatusCodes.Status200OK,
-            Message = "Expenses retrieved successfully",
-            Details = mapper.Map<ICollection<ExpenseResponse>>(expenses)
-        };
-    }
-
-    public async Task<BaseResponse<ExpenseResponse>> GetById(int id)
-    {
-        var expense = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id);
+        var expense = await context.Expenses
+            .AsNoTracking()
+            .Include(e => e.Category)
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (expense is null)
         {
-            return NotFound<ExpenseResponse>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
         return new BaseResponse<ExpenseResponse>
@@ -35,14 +30,14 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         };
     }
 
-    public async Task<BaseResponse<ICollection<ExpenseResponse>>> GetFiltered(ExpenseFilter filter)
+    public async Task<BaseResponse<PagedResponse<ExpenseResponse>>> GetExpenses(int userId, ExpenseFilter filter)
     {
-        IQueryable<Expense> query = context.Expenses.Include(expense => expense.Category);
+        ValidatePagingAndSorting(filter);
 
-        if (filter.UserId is not null)
-        {
-            query = query.Where(expense => expense.UserId == filter.UserId);
-        }
+        IQueryable<Expense> query = context.Expenses
+            .AsNoTracking()
+            .Include(expense => expense.Category)
+            .Where(expense => expense.UserId == userId);
 
         if (filter.CategoryId is not null)
         {
@@ -51,71 +46,142 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         if (filter.Currency is not null)
         {
-            query = query.Where(expense => expense.Currency == filter.Currency);
+            var currency = filter.Currency.ToUpperInvariant();
+            query = query.Where(expense => expense.Currency == currency);
         }
 
-        if (filter.MinAmount is not null)
+        if (filter.MinimumAmount is not null)
         {
-            query = query.Where(expense => expense.Amount >= filter.MinAmount);
+            query = query.Where(expense => expense.Amount >= filter.MinimumAmount);
         }
 
-        if (filter.MaxAmount is not null)
+        if (filter.MaximumAmount is not null)
         {
-            query = query.Where(expense => expense.Amount <= filter.MaxAmount);
+            query = query.Where(expense => expense.Amount <= filter.MaximumAmount);
         }
 
         if (filter.DateFrom is not null)
         {
-            query = query.Where(expense => expense.ExpenseDate >= filter.DateFrom);
+            var dateFrom = filter.DateFrom.Value.Date;
+            query = query.Where(expense => expense.ExpenseDate >= dateFrom);
         }
 
         if (filter.DateTo is not null)
         {
-            query = query.Where(expense => expense.ExpenseDate <= filter.DateTo);
+            // Exclusive upper bound so expenses later on the last day are included
+            var dateToExclusive = filter.DateTo.Value.Date.AddDays(1);
+            query = query.Where(expense => expense.ExpenseDate < dateToExclusive);
         }
 
-        var expenses = await query.ToListAsync();
+        var totalCount = await query.CountAsync();
 
-        return new BaseResponse<ICollection<ExpenseResponse>>
+        var expenses = await ApplySorting(query, filter)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .ToListAsync();
+
+        return new BaseResponse<PagedResponse<ExpenseResponse>>
         {
             Status = StatusCodes.Status200OK,
             Message = "Expenses retrieved successfully",
-            Details = mapper.Map<ICollection<ExpenseResponse>>(expenses)
+            Details = new PagedResponse<ExpenseResponse>
+            {
+                Items = mapper.Map<ICollection<ExpenseResponse>>(expenses),
+                Page = filter.Page,
+                PageSize = filter.PageSize,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize)
+            }
         };
     }
 
-    public async Task<BaseResponse<bool>> Create(ExpenseRequest request)
+    public async Task<BaseResponse<ExpenseSummary>> GetSummary(int userId, DateOnly? dateFrom, DateOnly? dateTo)
     {
-        if (request.Amount <= 0)
+        var errors = new Dictionary<string, string[]>();
+        if (dateFrom is null)
         {
-            return InvalidAmount();
+            errors["dateFrom"] = ["dateFrom is required."];
         }
 
-        if (request.Currency.Length != 3 || request.Currency.All(c => !char.IsLetter(c)))
+        if (dateTo is null)
         {
-            return InvalidCurrency();
+            errors["dateTo"] = ["dateTo is required."];
         }
 
-        var category = await context.Categories
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
+        }
+
+        if (dateFrom > dateTo)
+        {
+            throw new ValidationException("dateFrom", "dateFrom cannot be later than dateTo.");
+        }
+
+        var from = dateFrom!.Value.ToDateTime(TimeOnly.MinValue);
+        var toExclusive = dateTo!.Value.AddDays(1).ToDateTime(TimeOnly.MinValue);
+
+        var groups = await context.Expenses
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == request.CategoryId);
-        
-        if (category is null)
+            .Where(expense => expense.UserId == userId && expense.ExpenseDate >= from && expense.ExpenseDate < toExclusive)
+            .GroupBy(expense => new { expense.CategoryId, CategoryName = expense.Category.Name, expense.Currency })
+            .Select(group => new
+            {
+                group.Key.CategoryId,
+                group.Key.CategoryName,
+                group.Key.Currency,
+                Count = group.Count(),
+                TotalAmount = group.Sum(expense => expense.Amount)
+            })
+            .ToListAsync();
+
+        var currencies = groups.Select(group => group.Currency).Distinct().ToList();
+        if (currencies.Count > 1)
         {
-            return InvalidCategory();
+            throw new BadRequestException(
+                $"All expenses in the selected period must have the same currency, found: {string.Join(", ", currencies.Order())}");
         }
 
-        if (!category.IsActive)
+        return new BaseResponse<ExpenseSummary>
         {
-            return InactiveCategory();
-        }
-        
+            Status = StatusCodes.Status200OK,
+            Message = "Expense summary retrieved successfully",
+            Details = new ExpenseSummary
+            {
+                DateFrom = dateFrom.Value,
+                DateTo = dateTo.Value,
+                ExpenseCount = groups.Sum(group => group.Count),
+                TotalAmount = (decimal)groups.Sum(group => group.TotalAmount),
+                Currency = currencies.SingleOrDefault(),
+                Categories = groups
+                    .OrderBy(group => group.CategoryId)
+                    .Select(group => new CategorySummary
+                    {
+                        CategoryId = group.CategoryId,
+                        CategoryName = group.CategoryName,
+                        TotalAmount = (decimal)group.TotalAmount
+                    })
+                    .ToList()
+            }
+        };
+    }
+
+    public async Task<BaseResponse<bool>> Create(int userId, ExpenseRequest request)
+    {
+        ValidateFields(request);
+        await ValidateCategory(request.CategoryId, currentCategoryId: null);
+
         var expense = mapper.Map<Expense>(request);
-        expense.Currency = request.Currency.ToUpperInvariant();
+        expense.Name = request.Name ?? string.Empty;
+        expense.UserId = userId;
+        expense.Currency = request.Currency;
         expense.CreatedDateTime = DateTime.UtcNow;
 
         context.Expenses.Add(expense);
         await context.SaveChangesAsync();
+
+        logger.LogInformation("User {UserId} created expense {ExpenseId} for {Amount} {Currency} in category {CategoryId}",
+            userId, expense.Id, expense.Amount, expense.Currency, expense.CategoryId);
 
         return new BaseResponse<bool>
         {
@@ -125,26 +191,28 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         };
     }
 
-    public async Task<BaseResponse<bool>> Update(int id, ExpenseRequest request)
+    public async Task<BaseResponse<bool>> Update(int userId, int id, ExpenseRequest request)
     {
-        if (request.Amount <= 0)
-        {
-            return InvalidAmount();
-        }
+        ValidateFields(request);
 
-        var existing = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id);
+        var existing = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (existing is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
-        var expense = mapper.Map<Expense>(request);
-        existing.Name = expense.Name;
-        existing.Description = expense.Description;
-        existing.Amount = expense.Amount;
-        existing.CategoryId = expense.CategoryId;
+        await ValidateCategory(request.CategoryId, existing.CategoryId);
+
+        existing.Name = request.Name ?? existing.Name;
+        existing.Description = request.Description;
+        existing.Amount = request.Amount;
+        existing.Currency = request.Currency;
+        existing.ExpenseDate = request.ExpenseDate;
+        existing.CategoryId = request.CategoryId;
 
         await context.SaveChangesAsync();
+
+        logger.LogInformation("User {UserId} updated expense {ExpenseId}", userId, id);
 
         return new BaseResponse<bool>
         {
@@ -154,82 +222,111 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         };
     }
 
-    public async Task<BaseResponse<bool>> Delete(int id)
+    public async Task Delete(int userId, int id)
     {
-        var expense = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id);
+        var expense = await context.Expenses.FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
         if (expense is null)
         {
-            return NotFound<bool>(id);
+            throw new NotFoundException($"Expense with id {id} not found");
         }
 
         context.Expenses.Remove(expense);
-        var result = await context.SaveChangesAsync();
+        await context.SaveChangesAsync();
 
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status200OK,
-            Message = "Expense deleted successfully",
-            Details = result > 0
-        };
+        logger.LogInformation("User {UserId} deleted expense {ExpenseId}", userId, id);
     }
 
-    private static BaseResponse<T> NotFound<T>(int id)
+    private static void ValidatePagingAndSorting(ExpenseFilter filter)
     {
-        return new BaseResponse<T>
+        var errors = new Dictionary<string, string[]>();
+
+        if (filter.Page < 1)
         {
-            Status = StatusCodes.Status404NotFound,
-            Error = "Not Found",
-            Message = $"Expense with id {id} not found"
-        };
+            errors["page"] = ["Page must be 1 or greater."];
+        }
+
+        if (filter.PageSize is < 1 or > ExpenseFilter.MaxPageSize)
+        {
+            errors["pageSize"] = [$"Page size must be between 1 and {ExpenseFilter.MaxPageSize}."];
+        }
+
+        if (!SortColumns.Contains(filter.SortBy))
+        {
+            errors["sortBy"] = ["Sort by must be one of: expenseDate, amount, createdAt."];
+        }
+
+        if (!filter.SortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase)
+            && !filter.SortDirection.Equals("desc", StringComparison.OrdinalIgnoreCase))
+        {
+            errors["sortDirection"] = ["Sort direction must be asc or desc."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
+        }
     }
 
-    private static BaseResponse<bool> InvalidAmount()
+    private static readonly HashSet<string> SortColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        return new BaseResponse<bool>
+        "expenseDate", "amount", "createdAt"
+    };
+
+    private static IQueryable<Expense> ApplySorting(IQueryable<Expense> query, ExpenseFilter filter)
+    {
+        var descending = filter.SortDirection.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedQueryable<Expense> ordered = filter.SortBy.ToLowerInvariant() switch
         {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "Expense amount must be greater than zero"
+            "amount" => descending ? query.OrderByDescending(e => e.Amount) : query.OrderBy(e => e.Amount),
+            "createdat" => descending ? query.OrderByDescending(e => e.CreatedDateTime) : query.OrderBy(e => e.CreatedDateTime),
+            _ => descending ? query.OrderByDescending(e => e.ExpenseDate) : query.OrderBy(e => e.ExpenseDate)
         };
+
+        // Id as a tie-breaker keeps the order stable, so items don't move between pages
+        return descending ? ordered.ThenByDescending(e => e.Id) : ordered.ThenBy(e => e.Id);
+    }
+
+    // Collects every invalid field so the client gets all errors in one response
+    private static void ValidateFields(ExpenseRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (request.Amount <= 0)
+        {
+            errors["amount"] = ["Amount must be greater than zero."];
+        }
+
+        if (request.Currency.Length != 3 || request.Currency.Any(c => !char.IsAsciiLetterUpper(c)))
+        {
+            errors["currency"] = ["Currency must contain exactly three uppercase letters (e.g. AMD, USD, EUR)."];
+        }
+
+        if (request.ExpenseDate.Date > DateTime.UtcNow.Date.AddDays(1))
+        {
+            errors["expenseDate"] = ["The selected date cannot be more than one day from current day."];
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new ValidationException(errors);
+        }
     }
     
-    private static BaseResponse<bool> InvalidCurrency()
+    private async Task ValidateCategory(int categoryId, int? currentCategoryId)
     {
-        return new BaseResponse<bool>
+        var category = await context.Categories
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == categoryId);
+
+        if (category is null)
         {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "Currency must contain exactly three uppercase letters"
-        };
-    }
-    
-    private static BaseResponse<bool> InvalidCategory()
-    {
-        return new BaseResponse<bool>
+            throw new ValidationException("categoryId", "The selected category does not exist.");
+        }
+
+        if (!category.IsActive && category.Id != currentCategoryId)
         {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected category cannot be used for creating an expense"
-        };
-    }
-    
-    private static BaseResponse<bool> InactiveCategory()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected category is inactive"
-        };
-    }
-    
-    private static BaseResponse<bool> InvalidDate()
-    {
-        return new BaseResponse<bool>
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Error = "Bad Request",
-            Message = "The selected date cannot be more than one day from current day"
-        };
+            throw new ValidationException("categoryId", "The selected category is inactive.");
+        }
     }
 }
