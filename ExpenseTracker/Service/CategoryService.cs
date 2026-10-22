@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
 
-public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): ICategoryService
+public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper, ILogger<CategoryService> logger): ICategoryService
 {
     public async Task<BaseResponse<ICollection<CategoryResponse>>> GetCategories(bool includeInactive)
     {
@@ -56,6 +56,8 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         context.Categories.Add(category);
         var result = await context.SaveChangesAsync();
 
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' created", category.Id, category.Name);
+
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status201Created,
@@ -79,6 +81,8 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
         }
         mapper.Map(request, category);
         await context.SaveChangesAsync();
+
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' updated", category.Id, category.Name);
 
         return new BaseResponse<bool>
         {
@@ -105,5 +109,7 @@ public class CategoryService(ExpenseTrackerDbContext context, IMapper mapper): I
 
         context.Categories.Update(category);
         await context.SaveChangesAsync();
+
+        logger.LogInformation("Category {CategoryId} '{CategoryName}' deactivated", category.Id, category.Name);
     }
 }

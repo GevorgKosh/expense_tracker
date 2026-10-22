@@ -8,6 +8,7 @@ using ExpenseTracker.Service;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ExpenseTracker.Tests;
 
@@ -22,7 +23,7 @@ public class ExpenseServiceTests
         category.IsActive = false;
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var request = new ExpenseRequest
         {
             Name = "test_name",
@@ -45,7 +46,7 @@ public class ExpenseServiceTests
     public async Task Create_WithZeroOrNegativeAmount_IsRejected(decimal amount)
     {
         await using var context = CreateContext();
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var request = new ExpenseRequest
         {
             Name = "test_name",
@@ -77,7 +78,7 @@ public class ExpenseServiceTests
             CreateExpense(4, new DateTime(2026, 4, 10)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var filter = new ExpenseFilter
         {
             DateFrom = dateFrom is null ? null : DateTime.Parse(dateFrom),
@@ -112,7 +113,7 @@ public class ExpenseServiceTests
         context.Expenses.AddRange(matching, wrongCategory, wrongCurrency, tooSmall, outsideDates);
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var filter = new ExpenseFilter
         {
             CategoryId = 1,
@@ -140,7 +141,7 @@ public class ExpenseServiceTests
         context.Expenses.AddRange(CreateExpense(1, new DateTime(2026, 7, 10)), otherUsersExpense);
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.GetExpenses(1, new ExpenseFilter());
 
@@ -154,7 +155,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(1, new DateTime(2026, 7, 31, 18, 0, 0)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.GetExpenses(1, new ExpenseFilter { DateTo = new DateTime(2026, 7, 31) });
 
@@ -168,7 +169,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.GetById(1, 10);
 
@@ -185,7 +186,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.GetById(2, 10));
     }
@@ -197,7 +198,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var request = CreateUpdateRequest(categoryId: 2);
 
         var response = await service.Update(1, 10, request);
@@ -219,7 +220,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.Update(2, 10, CreateUpdateRequest(categoryId: 1)));
         var expense = await context.Expenses.AsNoTracking().SingleAsync(e => e.Id == 10);
@@ -235,7 +236,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var request = CreateUpdateRequest(categoryId);
         request.Currency = currency;
 
@@ -251,7 +252,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
         var request = CreateUpdateRequest(categoryId: 1);
         request.ExpenseDate = DateTime.UtcNow.Date.AddDays(2);
 
@@ -267,7 +268,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await DeactivateCategory(context, 1);
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.Update(1, 10, CreateUpdateRequest(categoryId: 1));
 
@@ -281,7 +282,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await DeactivateCategory(context, 2);
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var exception = await Assert.ThrowsAsync<ValidationException>(
             () => service.Update(1, 10, CreateUpdateRequest(categoryId: 2)));
@@ -315,7 +316,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         await service.Delete(1, 10);
 
@@ -329,7 +330,7 @@ public class ExpenseServiceTests
         context.Expenses.Add(CreateExpense(10, new DateTime(2026, 7, 17)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.Delete(2, 10));
 
@@ -354,7 +355,7 @@ public class ExpenseServiceTests
         context.Expenses.AddRange(lunch, dinner, taxi, outsidePeriod, otherUser);
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
 
@@ -389,7 +390,7 @@ public class ExpenseServiceTests
         context.Expenses.AddRange(amd, CreateExpense(2, new DateTime(2026, 7, 11)));
         await context.SaveChangesAsync();
 
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var exception = await Assert.ThrowsAsync<BadRequestException>(
             () => service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31)));
@@ -404,7 +405,7 @@ public class ExpenseServiceTests
     public async Task GetSummary_WithMissingOrReversedDates_IsRejected(string? dateFrom, string? dateTo, string invalidField)
     {
         await using var context = CreateContext();
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var exception = await Assert.ThrowsAsync<ValidationException>(() => service.GetSummary(
             1,
@@ -418,7 +419,7 @@ public class ExpenseServiceTests
     public async Task GetSummary_WithNoExpenses_ReturnsEmptySummary()
     {
         await using var context = CreateContext();
-        var service = new ExpenseService(context, CreateMapper());
+        var service = new ExpenseService(context, CreateMapper(), NullLogger<ExpenseService>.Instance);
 
         var response = await service.GetSummary(1, new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31));
 

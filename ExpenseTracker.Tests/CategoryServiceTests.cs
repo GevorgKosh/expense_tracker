@@ -7,6 +7,7 @@ using ExpenseTracker.Mapping;
 using ExpenseTracker.Service;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ExpenseTracker.Tests;
 
@@ -19,7 +20,7 @@ public class CategoryServiceTests
     public async Task Create_WithDuplicateName_IsRejected(string name)
     {
         await using var context = CreateContext();
-        var service = new CategoryService(context, CreateMapper());
+        var service = new CategoryService(context, CreateMapper(), NullLogger<CategoryService>.Instance);
         var request = new CategoryRequest { Type = CategoryType.Food, Name = name, Description = "test" };
 
         await Assert.ThrowsAsync<ConflictException>(() => service.Create(request));

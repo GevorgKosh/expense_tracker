@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Service;
 
-public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IExpenseService
+public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper, ILogger<ExpenseService> logger): IExpenseService
 {
     public async Task<BaseResponse<ExpenseResponse>> GetById(int userId, int id)
     {
@@ -165,6 +165,9 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
         context.Expenses.Add(expense);
         await context.SaveChangesAsync();
 
+        logger.LogInformation("User {UserId} created expense {ExpenseId} for {Amount} {Currency} in category {CategoryId}",
+            userId, expense.Id, expense.Amount, expense.Currency, expense.CategoryId);
+
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status201Created,
@@ -194,6 +197,8 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         await context.SaveChangesAsync();
 
+        logger.LogInformation("User {UserId} updated expense {ExpenseId}", userId, id);
+
         return new BaseResponse<bool>
         {
             Status = StatusCodes.Status200OK,
@@ -212,6 +217,8 @@ public class ExpenseService(ExpenseTrackerDbContext context, IMapper mapper): IE
 
         context.Expenses.Remove(expense);
         await context.SaveChangesAsync();
+
+        logger.LogInformation("User {UserId} deleted expense {ExpenseId}", userId, id);
     }
 
     // Collects every invalid field so the client gets all errors in one response
